@@ -39,6 +39,7 @@ module axis_afifo (
   wire wr_full, rd_empty;
 
   assign s_tready_o = ~wr_full;
+  assign m_tvalid_o = ~rd_empty;
 
   afifo_gray #(
       .WIDTH(WIDTH + 1),
@@ -51,7 +52,7 @@ module axis_afifo (
 
       // Write clock domain:
       .wr_clk_i (s_aclk),
-      .wr_en_i  (s_tvalid_i),
+      .wr_en_i  (s_tvalid_i & ~wr_full),
       .wr_data_i({s_tlast_i, s_tdata_i}),
       .wfull_o  (wr_full),
 

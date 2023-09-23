@@ -32,6 +32,7 @@ module bulk_ep_out #(
     parameter FPGA_FAMILY = "7series"
 ) (
     input  wire reset_n,
+
     input  wire bulk_ep_out_clock,
     input  wire bulk_ep_out_xfer_i, // todo: also unconnected in original ...
     output wire bulk_ep_out_ready_read_o,
@@ -51,6 +52,8 @@ module bulk_ep_out #(
   wire prog_full;
   reg  blk_xfer_out_ready_read_out;
 
+  // todo: ...
+  assign prog_full = bulk_ep_out_tready_o;
   assign bulk_ep_out_ready_read_o = blk_xfer_out_ready_read_out;
 
   /* Full Latch */
@@ -58,31 +61,6 @@ module bulk_ep_out #(
     // todo: WTF !?
     blk_xfer_out_ready_read_out <= ~prog_full;
   end
-
-/*
-  usb_blk_fifo #(
-      .FPGA_VENDOR(FPGA_VENDOR),
-      .FPGA_FAMILY(FPGA_FAMILY),
-      .CLOCK_MODE("ASYNC"),
-      .FIFO_PACKET(0),
-      .FIFO_DEPTH(1024),
-      .DATA_WIDTH(8),
-      .PROG_FULL_THRESHOLD(960)
-  ) usb_blk_out_fifo (
-      .m_aclk(axis_clk),
-      .s_aclk(usb_clk),
-      .s_aresetn(~rst),
-      .s_axis_tvalid(blk_xfer_out_data_valid),
-      .s_axis_tready(blk_xfer_out_data_ready),
-      .s_axis_tdata(blk_xfer_out_data),
-      .s_axis_tlast(blk_xfer_out_data_last),
-      .m_axis_tvalid(axis_tvalid),
-      .m_axis_tready(axis_tready),
-      .m_axis_tdata(axis_tdata),
-      .m_axis_tlast(axis_tlast),
-      .axis_prog_full(prog_full)
-  );
-*/
 
   axis_afifo #(
       .WIDTH(8),

@@ -3,12 +3,12 @@ module ulpi_bulk_axis_tb;
 
   localparam FPGA_VENDOR = "gowin";
   localparam FPGA_FAMILY = "gw2a";
-  localparam bit [63:0] SERIAL_NUMBER = "FACE0123";
+  localparam [63:0] SERIAL_NUMBER = "FACE0123";
 
-  localparam bit HIGH_SPEED = 1'b1;
-  localparam bit CHANNEL_IN_ENABLE = 1'b1;
-  localparam bit CHANNEL_OUT_ENABLE = 1'b1;
-  localparam bit PACKET_MODE = 1'b0;
+  localparam HIGH_SPEED = 1'b1;
+  localparam CHANNEL_IN_ENABLE = 1'b1;
+  localparam CHANNEL_OUT_ENABLE = 1'b1;
+  localparam PACKET_MODE = 1'b0;
 
 
   // -- Global system signals -- //
