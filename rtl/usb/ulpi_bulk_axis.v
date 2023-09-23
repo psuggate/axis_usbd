@@ -2,13 +2,35 @@
 `define SERIAL_NUMBER "BULK0000"
 /**
  * Top-level USB ULPI Bulk transfer endpoint (IN and/or OUT) core.
- * 
+ *
  * Note: Data from/to this core is via AXI4 Stream interconnects.
  */
-module ulpi_bulk_axis (  /*AUTOARG*/);
+module ulpi_bulk_axis (
+    ulpi_clock_i,
+    ulpi_reset_o,
+    ulpi_dir_i,
+    ulpi_nxt_i,
+    ulpi_stp_o,
+    ulpi_data_t,
+    ulpi_data_i,
+    ulpi_data_o,
 
-  parameter string FPGA_VENDOR = "xilinx";  // todo: keep this, and add "gowin"?
-  parameter string FPGA_FAMILY = "7series";
+    aclk,
+    aresetn,
+
+    s_axis_tvalid_i,
+    s_axis_tready_o,
+    s_axis_tlast_i,
+    s_axis_tdata_i,
+
+    m_axis_tvalid_o,
+    m_axis_tready_i,
+    m_axis_tlast_o,
+    m_axis_tdata_o
+);
+
+  parameter FPGA_VENDOR = "xilinx";  // todo: keep this, and add "gowin"?
+  parameter FPGA_FAMILY = "7series";
 
   // USB configuration
   parameter bit HIGH_SPEED = 1;  /* 0 - Full-Speed; 1 - High-Speed */
@@ -99,7 +121,7 @@ module ulpi_bulk_axis (  /*AUTOARG*/);
 
 
   // todo: this is what 'axis_usbd' uses, but check the ULPI specs/timing diagrams
-  assign ulpi_data_t = ulpi_dir;
+  assign ulpi_data_t = ulpi_dir_i;
 
   bulk_ep_axis_bridge #(
       .FPGA_VENDOR(FPGA_VENDOR),
@@ -112,23 +134,23 @@ module ulpi_bulk_axis (  /*AUTOARG*/);
       .sys_clk(aclk),
       .reset_n(aresetn),
 
-      .ulpi_clk(ulpi_clk),
-      .ulpi_reset(ulpi_reset),
-      .ulpi_dir(ulpi_dir),
-      .ulpi_nxt(ulpi_nxt),
-      .ulpi_stp(ulpi_stp),
-      .ulpi_data_in(ulpi_data_i),
+      .ulpi_clk     (ulpi_clock_i),
+      .ulpi_reset   (ulpi_reset_o),
+      .ulpi_dir     (ulpi_dir_i),
+      .ulpi_nxt     (ulpi_nxt_i),
+      .ulpi_stp     (ulpi_stp_o),
+      .ulpi_data_in (ulpi_data_i),
       .ulpi_data_out(ulpi_data_o),
 
-      .s_axis_tvalid(m_axis_tvalid),
-      .s_axis_tready(m_axis_tready),
-      .s_axis_tdata (m_axis_tdata),
-      .s_axis_tlast (m_axis_tlast),
+      .s_axis_tvalid(s_axis_tvalid_i),
+      .s_axis_tready(s_axis_tready_o),
+      .s_axis_tlast (s_axis_tlast_i),
+      .s_axis_tdata (s_axis_tdata_i),
 
-      .m_axis_tvalid(s_axis_tvalid),
-      .m_axis_tready(s_axis_tready),
-      .m_axis_tdata (s_axis_tdata),
-      .m_axis_tlast (s_axis_tlast)
+      .m_axis_tvalid(m_axis_tvalid_o),
+      .m_axis_tready(m_axis_tready_i),
+      .m_axis_tlast (m_axis_tlast_o),
+      .m_axis_tdata (m_axis_tdata_o)
   );
 
 endmodule  // ulpi_bulk_axis

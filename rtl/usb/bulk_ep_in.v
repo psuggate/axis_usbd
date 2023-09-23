@@ -37,7 +37,7 @@ module bulk_ep_in (
     axis_tdata_i,
 
     bulk_ep_in_clock,
-    bulk_in_ep_i,
+    bulk_ep_in_xfer_i,
     bulk_ep_in_has_data_o,
 
     bulk_ep_in_tvalid_o,
@@ -76,7 +76,7 @@ module bulk_ep_in (
   reg was_last;
   reg bulk_xfer_in_has_data_out;
 
-  assign bulk_xfer_in_has_data = bulk_xfer_in_has_data_out;
+  assign bulk_ep_in_has_data_o = bulk_xfer_in_has_data_out;
   assign prog_full = ~axis_tready_o;
 
   always @(posedge bulk_ep_in_clock) begin
@@ -109,7 +109,7 @@ module bulk_ep_in (
     end else begin
       if ((axis_tvalid_i == 1'b1) && (axis_tready_o == 1'b1) && (axis_tlast_i == 1'b1)) begin
         was_last <= 1'b1;
-      end else if ((axis_tvalid_i == 1'b1) && (axis_tready_i == 1'b1) && (axis_tlast_i == 1'b0)) begin
+      end else if ((axis_tvalid_i == 1'b1) && (axis_tready_o == 1'b1) && (axis_tlast_i == 1'b0)) begin
         was_last <= 1'b0;
       end
     end

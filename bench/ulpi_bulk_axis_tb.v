@@ -1,8 +1,8 @@
 `timescale 1ns / 100ps
-module axis_usbd_tb;
+module ulpi_bulk_axis_tb;
 
-  localparam string FPGA_VENDOR = "gowin";
-  localparam string FPGA_FAMILY = "gw2a";
+  localparam FPGA_VENDOR = "gowin";
+  localparam FPGA_FAMILY = "gw2a";
   localparam bit [63:0] SERIAL_NUMBER = "FACE0123";
 
   localparam bit HIGH_SPEED = 1'b1;
@@ -20,6 +20,16 @@ module axis_usbd_tb;
   always #8 usb_clk <= ~usb_clk;
   always #5 axi_clk <= ~axi_clk;
 
+wire usb_rst_n;
+
+/*
+reg usb_rst_1, usb_rst_0;
+
+always @(posedge usb_clk) begin
+  {usb_rst, usb_rst_1, usb_rst_0} <= {usb_rst_1, usb_rst_0, reset_n};
+end
+*/
+
 
   // -- Simulaton stimulus -- //
 
@@ -34,7 +44,7 @@ module axis_usbd_tb;
 
   // -- Logic for communicating with the MUT -- //
 
-  wire ulpi_dir, ulpi_nxt, ulpi_stp;
+  wire ulpi_dir, ulpi_nxt, ulpi_stp, ulpi_data_t;
   wire [7:0] ulpi_data_i, ulpi_data_o;
   wire [7:0] ulpi_data_w = ulpi_data_t ? ulpi_data_i : ulpi_data_o;
 
@@ -57,7 +67,7 @@ module axis_usbd_tb;
       .PACKET_MODE(PACKET_MODE)
   ) ulpi_bulk_axis_inst (
       .ulpi_clock_i(usb_clk),
-      .ulpi_reset_o(usb_rst),
+      .ulpi_reset_o(usb_rst_n),
       .ulpi_dir_i  (ulpi_dir),
       .ulpi_nxt_i  (ulpi_nxt),
       .ulpi_stp_o  (ulpi_stp),
@@ -68,15 +78,15 @@ module axis_usbd_tb;
       .aclk(axi_clk),
       .aresetn(reset_n),
 
-      .s_axis_tvalid_i(),
-      .s_axis_tready_o(),
-      .s_axis_tlast_i (),
-      .s_axis_tdata_i (),
+      .s_axis_tvalid_i(s_tvalid),
+      .s_axis_tready_o(s_tready),
+      .s_axis_tlast_i (s_tlast),
+      .s_axis_tdata_i (s_tdata),
 
-      .m_axis_tvalid_o(),
-      .m_axis_tready_i(),
-      .m_axis_tlast_o (),
-      .m_axis_tdata_o ()
+      .m_axis_tvalid_o(m_tvalid),
+      .m_axis_tready_i(m_tready),
+      .m_axis_tlast_o (m_tlast),
+      .m_axis_tdata_o (m_tdata)
   );
 
 

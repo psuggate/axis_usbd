@@ -48,10 +48,10 @@ module usb_packet (
     input wire axis_rx_tlast_i,
     input wire [7:0] axis_rx_tdata_i,
 
-    output wire axis_tx_tvalid,
+    output wire axis_tx_tvalid_o,
     input wire axis_tx_tready_i,
-    output wire axis_tx_tlast,
-    output wire [7:0] axis_tx_tdata,
+    output wire axis_tx_tlast_o,
+    output wire [7:0] axis_tx_tdata_o,
 
     output wire [1:0] trn_type,
     output wire [6:0] trn_address,

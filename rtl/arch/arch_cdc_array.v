@@ -56,13 +56,13 @@ module arch_cdc_array #(
       );
     end else begin : g_generic_cdc_synch
 
-      reg [WIDTH-1] data_0 (* NOMERGE = true *);
+      (* NOMERGE = "TRUE" *) reg [WIDTH-1] data_0;
 
       always @(posedge src_clk) begin
         data_0 <= src_data;
       end
 
-      reg [WIDTH-1] data_1, data_2, data_3 (* NOMERGE = true *);
+      (* NOMERGE = "TRUE" *) reg [WIDTH-1] data_1, data_2, data_3;
 
       assign dst_data = data_3;
 
