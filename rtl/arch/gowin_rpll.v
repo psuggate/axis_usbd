@@ -1,17 +1,17 @@
 `timescale 1ns / 100ps
 module gowin_rpll (
-    clkout,
+    clkout, // 120 MHz by default
     lock,
     clkin
 );
 
   parameter FCLKIN = "27";
   parameter DYN_IDIV_SEL = "false";
-  parameter IDIV_SEL = 3;
+  parameter IDIV_SEL = 8;
   parameter DYN_FBDIV_SEL = "false";
-  parameter FBDIV_SEL = 54;
+  parameter FBDIV_SEL = 39;
   parameter DYN_ODIV_SEL = "false";
-  parameter ODIV_SEL = 2;
+  parameter ODIV_SEL = 8;
   parameter PSDA_SEL = "0000";
   parameter DYN_DA_EN = "true";
   parameter DUTYDA_SEL = "1000";

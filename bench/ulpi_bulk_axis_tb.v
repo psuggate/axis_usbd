@@ -20,15 +20,7 @@ module ulpi_bulk_axis_tb;
   always #8 usb_clk <= ~usb_clk;
   always #5 axi_clk <= ~axi_clk;
 
-wire usb_rst_n;
-
-/*
-reg usb_rst_1, usb_rst_0;
-
-always @(posedge usb_clk) begin
-  {usb_rst, usb_rst_1, usb_rst_0} <= {usb_rst_1, usb_rst_0, reset_n};
-end
-*/
+  wire usb_rst_n;
 
 
   // -- Simulaton stimulus -- //
