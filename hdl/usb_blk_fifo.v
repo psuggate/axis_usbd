@@ -1,4 +1,4 @@
-`timescale 1ns / 1ps
+`timescale 1ns / 100ps
 //////////////////////////////////////////////////////////////////////////////////
 // Company:
 // Engineer: Dmitry Matyunin (https://github.com/mcjtag)
@@ -54,11 +54,13 @@ module usb_blk_fifo #(
 	output wire s_axis_tready,
 	input wire [7:0]s_axis_tdata,
 	input wire s_axis_tlast,
+
 	input wire m_aclk,
 	output wire m_axis_tvalid,
 	input wire m_axis_tready,
 	output wire [7:0]m_axis_tdata,
 	output wire m_axis_tlast,
+
 	output wire axis_prog_full
 );
 

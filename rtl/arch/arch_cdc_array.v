@@ -1,7 +1,7 @@
 `timescale 1ns / 100ps
 //////////////////////////////////////////////////////////////////////////////////
 //
-// Module Name: arch_cdc_array, arch_cdc_reset, arch_fifo_axis, arch_fifo_async
+// Module Name: arch_cdc_array
 // Project Name: axis_usbd
 //
 // License: MIT
@@ -26,10 +26,8 @@
 // 
 //////////////////////////////////////////////////////////////////////////////////
 
-// CDC == Clock-Domain Crossing ??
-
 //
-// CDC Array
+// Clock-Domain Crossing (synchroniser) Array
 //
 module arch_cdc_array #(
     parameter FPGA_VENDOR = "xilinx",
@@ -56,15 +54,15 @@ module arch_cdc_array #(
           .src_clk (src_clk),
           .src_in  (src_data)
       );
-    end else begin
+    end else begin : g_generic_cdc_synch
 
-      reg [WIDTH-1] data_0;
+      reg [WIDTH-1] data_0 (* NOMERGE = true *);
 
       always @(posedge src_clk) begin
         data_0 <= src_data;
       end
 
-      reg [WIDTH-1] data_1, data_2, data_3;
+      reg [WIDTH-1] data_1, data_2, data_3 (* NOMERGE = true *);
 
       assign dst_data = data_3;
 
@@ -77,6 +75,7 @@ module arch_cdc_array #(
 
 endmodule
 
+/*
 //
 // CDC Reset
 //
@@ -267,3 +266,4 @@ module arch_fifo_async #(
   endgenerate
 
 endmodule
+*/
