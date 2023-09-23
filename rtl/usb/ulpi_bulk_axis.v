@@ -7,25 +7,25 @@
  */
 module ulpi_bulk_axis (  /*AUTOARG*/);
 
-  parameter FPGA_VENDOR = "xilinx";  // todo: keep this, and add "gowin"?
-  parameter FPGA_FAMILY = "7series";
+  parameter string FPGA_VENDOR = "xilinx";  // todo: keep this, and add "gowin"?
+  parameter string FPGA_FAMILY = "7series";
 
   // USB configuration
-  parameter integer HIGH_SPEED = 1;  /* 0 - Full-Speed; 1 - High-Speed */
-  parameter [63:0] SERIAL_NUMBER = `SERIAL_NUMBER;
-  parameter CHANNEL_IN_ENABLE = 1;  /* 0 - Disable; 1 - Enable */
-  parameter CHANNEL_OUT_ENABLE = 1;  /* 0 - Disable; 1 - Enable */
+  parameter bit HIGH_SPEED = 1;  /* 0 - Full-Speed; 1 - High-Speed */
+  parameter bit [63:0] SERIAL_NUMBER = `SERIAL_NUMBER;
+  parameter bit CHANNEL_IN_ENABLE = 1;  /* 0 - Disable; 1 - Enable */
+  parameter bit CHANNEL_OUT_ENABLE = 1;  /* 0 - Disable; 1 - Enable */
 
   // todo: does this still do anything ??
-  parameter PACKET_MODE = 0;  /* 0 - Stream Mode; 1 - Packet Mode */
+  parameter bit PACKET_MODE = 0;  /* 0 - Stream Mode; 1 - Packet Mode */
 
   /* UTMI Low Pin Interface Ports */
-  input wire ulpi_clk;
-  output wire ulpi_reset;
+  input wire ulpi_clock_i;
+  output wire ulpi_reset_o;
 
-  input wire ulpi_dir;
-  input wire ulpi_nxt;
-  output wire ulpi_stp;
+  input wire ulpi_dir_i;
+  input wire ulpi_nxt_i;
+  output wire ulpi_stp_o;
   output wire ulpi_data_t;
   input wire [7:0] ulpi_data_i;
   output wire [7:0] ulpi_data_o;
@@ -34,15 +34,15 @@ module ulpi_bulk_axis (  /*AUTOARG*/);
   input wire aclk;
   input wire aresetn;
 
-  input wire s_axis_tvalid;
-  output wire s_axis_tready;
-  input wire s_axis_tlast;
-  input wire [7:0] s_axis_tdata;
+  input wire s_axis_tvalid_i;
+  output wire s_axis_tready_o;
+  input wire s_axis_tlast_i;
+  input wire [7:0] s_axis_tdata_i;
 
-  output wire m_axis_tvalid;
-  input wire m_axis_tready;
-  output wire [7:0] m_axis_tdata;
-  output wire m_axis_tlast;
+  output wire m_axis_tvalid_o;
+  input wire m_axis_tready_i;
+  output wire m_axis_tlast_o;
+  output wire [7:0] m_axis_tdata_o;
 
 
   function [15:0] config_channel;
