@@ -1,23 +1,7 @@
 `timescale 1ns / 100ps
-module top #(
-    parameter ANTENNAS = 24,
-    parameter WB_DATA_BITS = 8
-) (
-    // -- Global 16.368 MHz clock oscillator -- //
-    input CLK_16,
+module top (
     input clk_26,
     input rst_n,
-
-    // -- SPI interface to the RPi -- //
-    input  SCLK,
-    output MISO,
-    input  MOSI,
-    input  CS,
-
-    // -- Radio signals -- //
-    output RADIO_RECONFIG,
-    input [ANTENNAS-1:0] I1,
-    input [ANTENNAS-1:0] Q1,
 
     // -- USB PHY (ULPI) -- //
     output wire       ulpi_rst,
@@ -30,14 +14,12 @@ module top #(
 
   localparam FPGA_VENDOR = "gowin";
   localparam FPGA_FAMILY = "gw2a";
-  localparam [63:0] SERIAL_NUMBER = "FACE0123";
+  localparam [63:0] SERIAL_NUMBER = "GULP0123";
 
   localparam HIGH_SPEED = 1'b1;
   localparam CHANNEL_IN_ENABLE = 1'b1;
   localparam CHANNEL_OUT_ENABLE = 1'b1;
   localparam PACKET_MODE = 1'b0;
-
-  localparam integer COUNT_VALUE = 13_499_999;  // The number of times needed to time 0.5S
 
 
   // -- IOBs -- //
@@ -70,50 +52,6 @@ module top #(
   end
 
 
-  // -- Acquisition -- //
-
-  reg [23:0] I_data;
-  reg [23:0] Q_data;
-
-  reg [23:0] count_value_reg;  // counter_value
-  reg        count_value_flag;  // IO chaneg flag
-
-  reg        MISO_reg = 1'b0;  // Initial state
-  reg        RECONFIG_reg = 1'b0;  // Initial state
-
-  reg        RECONFIG_reg = 1'b0;  // Initial state
-
-  assign MISO = MISO_reg;
-  assign RADIO_RECONFIG = RECONFIG_reg;
-
-
-  // Latch the data
-  always @(posedge CLK_16) begin
-    I_data <= I1;
-    Q_data <= Q1;
-  end
-
-  always @(posedge CLK_16) begin
-    if (count_value_reg <= COUNT_VALUE) begin  //not count to 0.5S
-      count_value_reg  <= count_value_reg + 1'b1;  // Continue counting
-      count_value_flag <= 1'b0;  // No flip flag
-    end else begin  //Count to 0.5S
-      count_value_reg <= 23'b0;  // Clear counter,prepare for next time counting.
-      count_value_flag <= 1'b1;  // Flip flag
-      MISO_reg <= I_data[0];
-    end
-  end
-
-
-  // -- SDRAM -- //
-
-  // -- Correlator -- //
-
-  // -- Output SRAM's -- //
-
-  // -- SPI connection to RPi -- //
-
-
   // -- USB ULPI Bulk transfer endpoint (IN & OUT) -- //
 
   wire ulpi_data_t;
@@ -132,6 +70,8 @@ module top #(
   ulpi_bulk_axis #(
       .FPGA_VENDOR(FPGA_VENDOR),
       .FPGA_FAMILY(FPGA_FAMILY),
+      .VENDOR_ID(16'hF4CE),
+      .PRODUCT_ID(16'h0001),
       .HIGH_SPEED(HIGH_SPEED),
       .SERIAL_NUMBER(SERIAL_NUMBER),
       .CHANNEL_IN_ENABLE(CHANNEL_IN_ENABLE),

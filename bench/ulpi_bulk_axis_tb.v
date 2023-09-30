@@ -26,9 +26,9 @@ module ulpi_bulk_axis_tb;
   // -- Simulaton stimulus -- //
 
   initial begin : STIM
-    #50 reset_n <= 1'b1;
     $dumpfile("ulpi_bulk_axis_tb.vcd");
     $dumpvars;
+    #50 reset_n <= 1'b1;
 
     #800 $finish;
   end  // STIM

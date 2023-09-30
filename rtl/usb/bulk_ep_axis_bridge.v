@@ -28,8 +28,10 @@
 //////////////////////////////////////////////////////////////////////////////////
 
 module bulk_ep_axis_bridge #(
-    parameter FPGA_VENDOR = "xilinx",
-    parameter FPGA_FAMILY = "7series",
+    parameter FPGA_VENDOR = "gowin",
+    parameter FPGA_FAMILY = "gw2a",
+                             parameter VENDOR_ID = 16'hFACE,
+      parameter PRODUCT_ID = 16'h0BDE,
     parameter integer HIGH_SPEED = 1,
     parameter PACKET_MODE = 1,
     parameter [31:0] CONFIG_CHAN = 0,
@@ -178,8 +180,8 @@ module bulk_ep_axis_bridge #(
   assign m_axis_tlast = ep1_out_axis_tlast;
 
   usb_tlp #(
-      .VENDOR_ID(16'hFACE),
-      .PRODUCT_ID(16'h0BDE),
+      .VENDOR_ID(VENDOR_ID),
+      .PRODUCT_ID(PRODUCT_ID),
       .MANUFACTURER_LEN(7),
       .MANUFACTURER("mcjtag"),
       .PRODUCT_LEN(15),

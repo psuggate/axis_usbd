@@ -31,15 +31,17 @@ module ulpi_bulk_axis (
 
   parameter FPGA_VENDOR = "xilinx";  // todo: keep this, and add "gowin"?
   parameter FPGA_FAMILY = "7series";
+parameter [15:0] VENDOR_ID = 16'hFACE;
+parameter [15:0] PRODUCT_ID = 16'h0BDE;
 
   // USB configuration
-  parameter bit HIGH_SPEED = 1;  /* 0 - Full-Speed; 1 - High-Speed */
-  parameter bit [63:0] SERIAL_NUMBER = `SERIAL_NUMBER;
-  parameter bit CHANNEL_IN_ENABLE = 1;  /* 0 - Disable; 1 - Enable */
-  parameter bit CHANNEL_OUT_ENABLE = 1;  /* 0 - Disable; 1 - Enable */
+  parameter HIGH_SPEED = 1;  /* 0 - Full-Speed; 1 - High-Speed */
+  parameter [63:0] SERIAL_NUMBER = `SERIAL_NUMBER;
+  parameter CHANNEL_IN_ENABLE = 1;  /* 0 - Disable; 1 - Enable */
+  parameter CHANNEL_OUT_ENABLE = 1;  /* 0 - Disable; 1 - Enable */
 
   // todo: does this still do anything ??
-  parameter bit PACKET_MODE = 0;  /* 0 - Stream Mode; 1 - Packet Mode */
+  parameter PACKET_MODE = 0;  /* 0 - Stream Mode; 1 - Packet Mode */
 
   /* UTMI Low Pin Interface Ports */
   input wire ulpi_clock_i;
@@ -126,6 +128,8 @@ module ulpi_bulk_axis (
   bulk_ep_axis_bridge #(
       .FPGA_VENDOR(FPGA_VENDOR),
       .FPGA_FAMILY(FPGA_FAMILY),
+      .VENDOR_ID(VENDOR_ID),
+      .PRODUCT_ID(PRODUCT_ID),
       .HIGH_SPEED(HIGH_SPEED),
       .PACKET_MODE(PACKET_MODE),
       .CONFIG_CHAN({CONFIG_CHAN_OUT, CONFIG_CHAN_IN}),

@@ -221,7 +221,7 @@ module usb_tlp #(
   usb_ulpi #(
       .HIGH_SPEED(HIGH_SPEED)
   ) usb_ulpi_inst (
-      .rst(1'b0),
+      .rst(1'b1),
 
       .ulpi_data_in(ulpi_data_in),
       .ulpi_data_out(ulpi_data_out),

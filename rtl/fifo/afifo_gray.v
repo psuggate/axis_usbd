@@ -188,7 +188,7 @@ module afifo_gray #(
   //  Memory Block
   //-------------------------------------------------------------------------
 
-  reg [MSB:0] sram[ASIZE];
+  reg [MSB:0] sram[0:ASIZE-1];
 
   assign rd_data_o = sram[rp_bin[ASB:0]];
 
