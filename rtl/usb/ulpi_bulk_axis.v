@@ -29,10 +29,10 @@ module ulpi_bulk_axis (
     m_axis_tdata_o
 );
 
-  parameter FPGA_VENDOR = "xilinx";  // todo: keep this, and add "gowin"?
-  parameter FPGA_FAMILY = "7series";
-parameter [15:0] VENDOR_ID = 16'hFACE;
-parameter [15:0] PRODUCT_ID = 16'h0BDE;
+  parameter FPGA_VENDOR = "gowin";  // todo: keep this, and add "gowin"?
+  parameter FPGA_FAMILY = "gw2a";
+  parameter [15:0] VENDOR_ID = 16'hF4CE;
+  parameter [15:0] PRODUCT_ID = 16'h0003;
 
   // USB configuration
   parameter HIGH_SPEED = 1;  /* 0 - Full-Speed; 1 - High-Speed */
@@ -130,10 +130,14 @@ parameter [15:0] PRODUCT_ID = 16'h0BDE;
       .FPGA_FAMILY(FPGA_FAMILY),
       .VENDOR_ID(VENDOR_ID),
       .PRODUCT_ID(PRODUCT_ID),
+      .MANUFACTURER_LEN(19),
+      .MANUFACTURER("University of Otago"),
+      .PRODUCT_LEN(15),
+      .PRODUCT("AXIS USB Bridge"),
+      .SERIAL(SERIAL_NUMBER),
       .HIGH_SPEED(HIGH_SPEED),
       .PACKET_MODE(PACKET_MODE),
-      .CONFIG_CHAN({CONFIG_CHAN_OUT, CONFIG_CHAN_IN}),
-      .SERIAL(SERIAL_NUMBER)
+      .CONFIG_CHAN({CONFIG_CHAN_OUT, CONFIG_CHAN_IN})
   ) bulk_ep_axis_bridge_inst (
       .sys_clk(aclk),
       .reset_n(aresetn),
