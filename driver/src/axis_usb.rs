@@ -1,18 +1,88 @@
 use rusb::{
-    ConfigDescriptor, Context, Device, DeviceDescriptor, DeviceHandle, Direction, TransferType,
-    UsbContext,
+    ConfigDescriptor, Context, Device, DeviceDescriptor, DeviceHandle, Direction,
+    InterfaceDescriptor, TransferType, UsbContext,
 };
 
 pub const VENDOR_ID: u16 = 0xF4CE;
 pub const PRODUCT_ID: u16 = 0x0003;
+
+#[derive(Debug, PartialEq)]
+pub struct AxisUSB {
+    device_handle: DeviceHandle<Context>,
+    interfaces: Vec<u8>,
+    bulk_ep_in: Endpoint,
+    bulk_ep_out: Endpoint,
+    product_label: String,
+    serial_number: String,
+    context: Context,
+}
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Endpoint {
     pub config: u8,
     pub interface: u8,
     pub setting: u8,
-    pub address: u8,
+    pub address_in: u8,
+    pub address_out: u8,
+    // pub address: u8,
     pub has_driver: bool,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Interface {
+    pub configuration: u8,
+    pub number: u8,
+    pub alternate_setting: u8,
+    pub has_driver: bool,
+}
+
+pub fn configure_interface<T: UsbContext>(
+    handle: &mut DeviceHandle<T>,
+    interface: &Interface,
+) -> rusb::Result<()> {
+    if interface.has_driver {
+        eprintln!("USB device has a kernel driver loaded, attempting to detach ...");
+        handle.detach_kernel_driver(interface.number).ok();
+    }
+    // println!("{:#?}", endpoint);
+
+    handle.set_active_configuration(interface.configuration)?;
+    handle.claim_interface(interface.number)?;
+    handle.set_alternate_setting(interface.number, interface.alternate_setting)?;
+
+    Ok(())
+}
+
+impl Endpoint {
+    pub fn new(cfg: u8, ix: &InterfaceDescriptor) -> Self {
+        Self {
+            config: cfg,
+            interface: ix.interface_number(),
+            setting: ix.setting_number(),
+            address_in: 0u8,
+            address_out: 0u8,
+            has_driver: false,
+        }
+    }
+}
+
+pub fn find_interfaces<T: UsbContext>(
+    device: &mut Device<T>,
+    descriptor: &DeviceDescriptor,
+    handle: &DeviceHandle<T>,
+    transfer_type: TransferType,
+    direction: Direction,
+) -> Vec<u8> {
+    let numcfg = descriptor.num_configurations();
+    let config: ConfigDescriptor = (0..numcfg).find_map(|n| device.config_descriptor(n).ok())?;
+
+    let mut interfaces = Vec::new();
+
+    for ix in config.interfaces().flat_map(|i| i.descriptors()) {
+        interfaces.push(ix.interface_number());
+    }
+
+    interfaces
 }
 
 pub fn find_endpoint<T: UsbContext>(
@@ -26,11 +96,31 @@ pub fn find_endpoint<T: UsbContext>(
     let config: ConfigDescriptor = (0..numcfg).find_map(|n| device.config_descriptor(n).ok())?;
     // println!("Found '{}' configuration descriptors", numcfg);
 
+    for ix in config.interfaces().flat_map(|i| i.descriptors()) {
+        let ix_num: u8 = ix.interface_number();
+        let mut endpoint = Endpoint::new(config.number(), &ix);
+
+        for ep in ix.endpoint_descriptors() {
+            if ep.transfer_type() == transfer_type && ep.direction() == direction {
+                let has_driver: bool = handle.kernel_driver_active(ix_num).unwrap_or(false);
+
+                return Some(Endpoint {
+                    config: config.number(),
+                    interface: ix_num,
+                    setting: ix.setting_number(),
+                    address: ep.address(),
+                    has_driver,
+                });
+            }
+        }
+    }
+
+    /*
     for interface in config.interfaces() {
         for ix in interface.descriptors() {
+            let ix_num: u8 = ix.interface_number();
             for ep in ix.endpoint_descriptors() {
                 if ep.transfer_type() == transfer_type && ep.direction() == direction {
-                    let ix_num: u8 = ix.interface_number();
                     let has_driver: bool = handle.kernel_driver_active(ix_num).unwrap_or(false);
 
                     return Some(Endpoint {
@@ -44,7 +134,7 @@ pub fn find_endpoint<T: UsbContext>(
             }
         }
     }
-
+    */
     None
 }
 
@@ -84,17 +174,6 @@ pub fn find_axis_usb(context: &Context) -> Result<Device<Context>, rusb::Error> 
             .ok_or(rusb::Error::NotFound);
     }
     Err(rusb::Error::NotFound)
-}
-
-#[derive(Debug, PartialEq)]
-pub struct AxisUSB {
-    device_handle: DeviceHandle<Context>,
-    interfaces: Vec<u8>,
-    bulk_ep_in: Endpoint,
-    bulk_ep_out: Endpoint,
-    product_label: String,
-    serial_number: String,
-    context: Context,
 }
 
 impl AxisUSB {

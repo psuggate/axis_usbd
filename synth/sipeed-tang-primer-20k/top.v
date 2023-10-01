@@ -9,7 +9,23 @@ module top (
     input  wire       ulpi_dir,
     input  wire       ulpi_nxt,
     output wire       ulpi_stp,
-    inout  wire [7:0] ulpi_data
+    inout  wire [7:0] ulpi_data,
+
+    output [14-1:0] ddr_addr,     //ROW_WIDTH=14
+    output [ 3-1:0] ddr_bank,     //BANK_WIDTH=3
+    output          ddr_cs,
+    output          ddr_ras,
+    output          ddr_cas,
+    output          ddr_we,
+    output          ddr_ck,
+    output          ddr_ck_n,
+    output          ddr_cke,
+    output          ddr_odt,
+    output          ddr_reset_n,
+    output [ 2-1:0] ddr_dm,       //DM_WIDTH=2
+    inout  [16-1:0] ddr_dq,       //DQ_WIDTH=16
+    inout  [ 2-1:0] ddr_dqs,      //DQS_WIDTH=2
+    inout  [ 2-1:0] ddr_dqs_n     //DQS_WIDTH=2
 );
 
   localparam FPGA_VENDOR = "gowin";
@@ -28,16 +44,30 @@ module top (
 
   wire axi_clk, axi_lock;
   wire usb_clk, usb_rst_n;
+  wire ddr_clk, ddr_lock;
+
+wire clk_x1;
 
   // So 27.0 MHz divided by 9, then x40 = 120 MHz.
   gowin_rpll #(
       .FCLKIN("27"),
-      .IDIV_SEL(8),   // ~=  9
-      .FBDIV_SEL(39), // ~= 40
+      .IDIV_SEL(8),  // ~=  9
+      .FBDIV_SEL(39),  // ~= 40
       .ODIV_SEL(8)
-  ) gowin_rpll_inst (
+  ) axis_rpll_inst (
       .clkout(axi_clk),   // 120 MHz
       .lock  (axi_lock),
+      .clkin (clk_26)
+  );
+
+  gowin_rpll #(
+      .FCLKIN("27"),
+      .IDIV_SEL(3),  // ~=  4
+      .FBDIV_SEL(58),  // ~= 59
+      .ODIV_SEL(2)  // ??
+  ) ddr3_rpll_inst (
+      .clkout(ddr_clk),   // 400 MHz
+      .lock  (ddr_lock),
       .clkin (clk_26)
   );
 
@@ -122,6 +152,95 @@ module top (
       .m_tready_i(s_tready),
       .m_tlast_o (s_tlast),
       .m_tdata_o (s_tdata)
+  );
+
+
+  // -- Yucky DDR3 SDRAM core from GoWin -- //
+
+reg [5:0] app_burst_number; // ??
+reg [26:0] ap_addr;
+reg [2:0] ap_cmd;
+reg ap_valid;
+wire ap_ready;
+
+reg wr_valid, wr_last;
+wire wr_ready;
+reg [15:0] wr_stb_n;
+reg [127:0] wr_data;
+
+wire rd_valid, rd_last;
+wire [127:0] rd_data;
+
+wire init_calib_complete;
+
+always @(posedge clk_x1) begin
+  if (!rst_n) begin
+    wr_valid <= 1'b0;
+    wr_stb_n <= 16'h0000;
+  end
+end
+
+always @(posedge clk_x1) begin
+  if (!rst_n) begin
+    app_burst_number <= 6'h00;
+    ap_addr <= 27'h0000000;
+    ap_cmd <= 3'h0;
+    ap_valid <= 1'b0;
+  end else begin
+    ap_cmd <= ap_cmd;
+  end
+end
+
+
+  DDR3_Memory_Interface_Top ddr3_inst (
+      .clk(clk_26),  // from on-board oscillator
+      .rst_n(rst_n), // global reset
+
+      .memory_clk(ddr_clk),
+      .pll_lock(ddr_lock),
+
+      .app_burst_number(app_burst_number),
+      .cmd_ready(ap_ready),
+      .cmd(ap_cmd),
+      .cmd_en(ap_valid),
+      .addr({1'b0, ap_addr}),
+
+      .wr_data_rdy(wr_ready),
+      .wr_data(wr_data),
+      .wr_data_en(wr_valid),
+      .wr_data_end(wr_last),
+      .wr_data_mask(wr_stb_n),
+
+      .rd_data(rd_data),
+      .rd_data_valid(rd_valid),
+      .rd_data_end(rd_last),
+
+      .sr_req(1'b0),
+      .sr_ack(),
+      .ref_req(1'b0),
+      .ref_ack(),
+
+      .init_calib_complete(init_calib_complete),
+      .clk_out(clk_x1),
+      .burst(1'b1),
+
+      // mem interface
+      .ddr_rst      (),
+      .O_ddr_addr   (ddr_addr),
+      .O_ddr_ba     (ddr_bank),
+      .O_ddr_cs_n   (ddr_cs),
+      .O_ddr_ras_n  (ddr_ras),
+      .O_ddr_cas_n  (ddr_cas),
+      .O_ddr_we_n   (ddr_we),
+      .O_ddr_clk    (ddr_ck),
+      .O_ddr_clk_n  (ddr_ck_n),
+      .O_ddr_cke    (ddr_cke),
+      .O_ddr_odt    (ddr_odt),
+      .O_ddr_reset_n(ddr_reset_n),
+      .O_ddr_dqm    (ddr_dm),
+      .IO_ddr_dq    (ddr_dq),
+      .IO_ddr_dqs   (ddr_dqs),
+      .IO_ddr_dqs_n (ddr_dqs_n)
   );
 
 
