@@ -1,0 +1,63 @@
+[*]
+[*] GTKWave Analyzer v3.3.104 (w)1999-2020 BSI
+[*] Sun Oct  1 23:35:14 2023
+[*]
+[dumpfile] "./fifo16to1_tb.vcd"
+[dumpfile_mtime] "Sun Oct  1 23:29:15 2023"
+[dumpfile_size] 9913
+[savefile] "./fifo16to1_tb.gtkw"
+[timestart] 0
+[size] 2560 1376
+[pos] -1 -1
+*-16.391737 90000 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+[treeopen] fifo16to1_tb.
+[sst_width] 233
+[signals_width] 134
+[sst_expanded] 1
+[sst_vpaned_height] 414
+@28
+fifo16to1_tb.clock
+fifo16to1_tb.reset
+@800200
+-Stim
+@28
+fifo16to1_tb.start
+fifo16to1_tb.frame
+fifo16to1_tb.done
+@420
+fifo16to1_tb.count
+@1000200
+-Stim
+@800200
+-Write
+@28
+fifo16to1_tb.wr_valid
+fifo16to1_tb.wr_ready
+@22
+fifo16to1_tb.wr_data[31:0]
+@1000200
+-Write
+@800200
+-Read
+@28
+fifo16to1_tb.rd_valid
+fifo16to1_tb.rd_ready
+fifo16to1_tb.rd_last
+fifo16to1_tb.rd_data[1:0]
+@1000200
+-Read
+@28
+fifo16to1_tb.fifo16to1_inst.wrfull
+fifo16to1_tb.fifo16to1_inst.waddr[2:0]
+@22
+fifo16to1_tb.fifo16to1_inst.xdata[31:0]
+@23
+fifo16to1_tb.fifo16to1_inst.raddr[6:0]
+@22
+fifo16to1_tb.fifo16to1_inst.rdata[31:0]
+@28
+fifo16to1_tb.fifo16to1_inst.xread
+fifo16to1_tb.fifo16to1_inst.rempty
+fifo16to1_tb.fifo16to1_inst.rvalid
+[pattern_trace] 1
+[pattern_trace] 0

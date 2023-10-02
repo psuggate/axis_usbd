@@ -12,105 +12,105 @@
  * of data.
  * 
  */
-module axil_sdram_control (/*AUTOARG*/);
+module axil_sdram_control (  /*AUTOARG*/);
 
-parameter DATA_WIDTH = 32;
-localparam DATA_STRBS = DATA_WIDTH / 8;
-localparam MSB = DATA_WIDTH - 1;
-localparam SSB = DATA_STRBS - 1;
+  parameter DATA_WIDTH = 32;
+  localparam DATA_STRBS = DATA_WIDTH / 8;
+  localparam MSB = DATA_WIDTH - 1;
+  localparam SSB = DATA_STRBS - 1;
 
-parameter ADDR_WIDTH = 24;
-localparam ASB = ADDR_WIDTH - 1;
+  parameter ADDR_WIDTH = 24;
+  localparam ASB = ADDR_WIDTH - 1;
 
-parameter AXIS_WIDTH = 8;
-localparam XSB = AXIS_WIDTH - 1;
-
-
-input axi_clock;
-input axi_reset;
-
-// -- AXI4-Lite Controller Write & Read Channel -- //
-
-input aw_valid;
-output aw_ready;
-input [2:0] aw_prot;
-input [ASB:0] aw_addr;
-
-input wr_valid;
-output wr_ready;
-input [SSB:0] wr_strb;
-input [MSB:0] wr_data;
-
-output wb_valid;
-input wb_ready;
-output wb_resp;
-
-input ar_valid;
-output ar_ready;
-input [2:0] ar_prot;
-input [ASB:0] ar_addr;
-
-output rd_valid;
-input rd_ready;
-output rd_resp;
-output [MSB:0] rd_data;
-
-// -- AXI4-Stream Data Write & Read Channels -- //
-
-input s_tvalid;
-output s_tready;
-input s_tlast;
-input [XSB:0] s_tdata;
-
-output m_tvalid;
-input m_tready;
-output m_tlast;
-output [XSB:0] m_tdata;
-
-// -- To DDR3 Controller -- //
-
-input ddr_clock;
-input ddr_rst_n;
-
-output dc_valid;
-input dc_ready;
-output [2:0] dc_command;
-output [5:0] dc_blength;
-
-output dw_valid;
-input dw_ready;
-output dw_last;
-output [15:0] dw_stb_n;
-output [127:0] dw_data;
-
-input dr_valid;
-input dr_last;
-input [127:0] dr_data;
+  parameter AXIS_WIDTH = 8;
+  localparam XSB = AXIS_WIDTH - 1;
 
 
-// AXI4-Lite commands are fairly limited ...
-assign dc_blength = 6'h00;
+  input axi_clock;
+  input axi_reset;
+
+  // -- AXI4-Lite Controller Write & Read Channel -- //
+
+  input aw_valid;
+  output aw_ready;
+  input [2:0] aw_prot;
+  input [ASB:0] aw_addr;
+
+  input wr_valid;
+  output wr_ready;
+  input [SSB:0] wr_strb;
+  input [MSB:0] wr_data;
+
+  output wb_valid;
+  input wb_ready;
+  output wb_resp;
+
+  input ar_valid;
+  output ar_ready;
+  input [2:0] ar_prot;
+  input [ASB:0] ar_addr;
+
+  output rd_valid;
+  input rd_ready;
+  output rd_resp;
+  output [MSB:0] rd_data;
+
+  // -- AXI4-Stream Data Write & Read Channels -- //
+
+  input s_tvalid;
+  output s_tready;
+  input s_tlast;
+  input [XSB:0] s_tdata;
+
+  output m_tvalid;
+  input m_tready;
+  output m_tlast;
+  output [XSB:0] m_tdata;
+
+  // -- To DDR3 Controller -- //
+
+  input ddr_clock;
+  input ddr_rst_n;
+
+  output dc_valid;
+  input dc_ready;
+  output [2:0] dc_command;
+  output [5:0] dc_blength;
+
+  output dw_valid;
+  input dw_ready;
+  output dw_last;
+  output [15:0] dw_stb_n;
+  output [127:0] dw_data;
+
+  input dr_valid;
+  input dr_last;
+  input [127:0] dr_data;
 
 
-// -- FIFOs store incoming read & write requests -- //
-
-// Store:
-//
-//  - command (read or write)
-//  - address
-//  - burst length
-//  - write data
-//  - read & write responses
+  // AXI4-Lite commands are fairly limited ...
+  assign dc_blength = 6'h00;
 
 
-localparam COMMAND_WIDTH = 1 + 6 + ADDR_WIDTH;
-localparam CSB = COMMAND_WIDTH - 1;
+  // -- FIFOs store incoming read & write requests -- //
 
-wire cmd_mode;
-wire [5:0] cmd_size;
-wire [ASB:0] cmd_addr;
+  // Store:
+  //
+  //  - command (read or write)
+  //  - address
+  //  - burst length
+  //  - write data
+  //  - read & write responses
 
-wire [CSB:0] cmd_data = {cmd_mode, cmd_size, cmd_addr};
+
+  localparam COMMAND_WIDTH = 1 + 6 + ADDR_WIDTH;
+  localparam CSB = COMMAND_WIDTH - 1;
+
+  wire cmd_mode;
+  wire [5:0] cmd_size;
+  wire [ASB:0] cmd_addr;
+
+  wire [CSB:0] cmd_data = {cmd_mode, cmd_size, cmd_addr};
 
   axis_afifo #(
       .WIDTH(COMMAND_WIDTH),
@@ -151,10 +151,10 @@ wire [CSB:0] cmd_data = {cmd_mode, cmd_size, cmd_addr};
   );
 
 
-// -- DDR3 SDRAM command scheduler -- //
+  // -- DDR3 SDRAM command scheduler -- //
 
-always @(posedge ddr_clock) begin
-end
+  always @(posedge ddr_clock) begin
+  end
 
 
-endmodule // axil_sdram_control
+endmodule  // axil_sdram_control

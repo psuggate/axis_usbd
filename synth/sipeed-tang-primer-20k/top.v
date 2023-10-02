@@ -11,8 +11,8 @@ module top (
     output wire       ulpi_stp,
     inout  wire [7:0] ulpi_data,
 
-    output [14-1:0] ddr_addr,     //ROW_WIDTH=14
-    output [ 3-1:0] ddr_bank,     //BANK_WIDTH=3
+    output [14-1:0] ddr_addr,     // ROW_WIDTH=14
+    output [ 3-1:0] ddr_bank,     // BANK_WIDTH=3
     output          ddr_cs,
     output          ddr_ras,
     output          ddr_cas,
@@ -22,10 +22,10 @@ module top (
     output          ddr_cke,
     output          ddr_odt,
     output          ddr_reset_n,
-    output [ 2-1:0] ddr_dm,       //DM_WIDTH=2
-    inout  [16-1:0] ddr_dq,       //DQ_WIDTH=16
-    inout  [ 2-1:0] ddr_dqs,      //DQS_WIDTH=2
-    inout  [ 2-1:0] ddr_dqs_n     //DQS_WIDTH=2
+    output [ 2-1:0] ddr_dm,       // DM_WIDTH=2
+    inout  [16-1:0] ddr_dq,       // DQ_WIDTH=16
+    inout  [ 2-1:0] ddr_dqs,      // DQS_WIDTH=2
+    inout  [ 2-1:0] ddr_dqs_n     // DQS_WIDTH=2
 );
 
   localparam FPGA_VENDOR = "gowin";
@@ -46,7 +46,7 @@ module top (
   wire usb_clk, usb_rst_n;
   wire ddr_clk, ddr_lock;
 
-wire clk_x1;
+  wire clk_x1;
 
   // So 27.0 MHz divided by 9, then x40 = 120 MHz.
   gowin_rpll #(
@@ -155,55 +155,238 @@ wire clk_x1;
   );
 
 
+  // -- DDR3 Command FIFO -- //
+
+  wire x1_valid, x1_last;
+  reg x1_ready;
+  wire [7:0] x1_data;
+
+  axis_afifo #(
+      .WIDTH(8),
+      .ABITS(4)
+  ) ddr3_command_fifo_inst (
+      .s_aresetn(reset_n),
+
+      .s_aclk    (axi_clk),
+      .s_tvalid_i(m_tvalid),
+      .s_tready_o(m_tready),
+      .s_tlast_i (m_tlast),
+      .s_tdata_i (m_tdata),
+
+      .m_aclk    (clk_x1),
+      .m_tvalid_o(x1_valid),
+      .m_tready_i(x1_ready),
+      .m_tlast_o (x1_last),
+      .m_tdata_o (x1_data)
+  );
+
+
+  // -- DDR3 Read-Data Response FIFO -- //
+
+  reg re_valid, re_last;
+  wire re_ready;
+  reg [7:0] re_data;
+
+  wire us_valid, us_ready, us_last;
+  wire [7:0] us_data;
+
+  axis_afifo #(
+      .WIDTH(8),
+      .ABITS(4)
+  ) ddr3_response_fifo_inst (
+      .s_aresetn(reset_n),
+
+      .s_aclk    (clk_x1),
+      .s_tvalid_i(re_valid),
+      .s_tready_o(re_ready),
+      .s_tlast_i (re_last),
+      .s_tdata_i (re_data),
+
+      .m_aclk    (axi_clk),
+      .m_tvalid_o(us_valid),
+      .m_tready_i(us_ready),
+      .m_tlast_o (us_last),
+      .m_tdata_o (us_data)
+  );
+
+
+  // -- Memory Controller Commands -- //
+
+  localparam [2:0] STATE_INIT = 3'b000;
+  localparam [2:0] STATE_IDLE = 3'b111;
+
+  localparam [2:0] STATE_RADR = 3'b001;
+  localparam [2:0] STATE_READ = 3'b100;
+  localparam [2:0] STATE_RDAT = 3'b110;
+
+  localparam [2:0] STATE_WADR = 3'b010;
+  localparam [2:0] STATE_WDAT = 3'b011;
+  localparam [2:0] STATE_WRIT = 3'b101;
+
+  reg [2:0] state;  // smash early, smash often
+
+  localparam [3:0] CMD_NOP = 4'b0000;
+  localparam [3:0] CMD_STORE = 4'b1000;
+  localparam [3:0] CMD_FETCH = 4'b1001;
+
+  reg [3:0] ap_issue;
+
+  wire ap_ready, ap_valid;
+  wire [ 2:0] ap_cmd;
+  reg  [14:0] ap_addr;  // Don't need all address bits
+  wire [ 5:0] ap_blength;  // Set all bursts to 8 transfers
+
+  reg wr_valid, wr_last;
+  wire wr_ready;
+  wire [15:0] wr_stb_n = 16'h0000;
+  reg [127:0] wr_data;
+
+  wire rd_valid, rd_last;
+  wire [127:0] rd_data;
+
+  wire init_calib_complete;
+
+
+  // -- State-Machine for Issuing DDR3 Read- & Write Commands -- //
+
+  assign ap_blength = 6'h00;
+  assign ap_cmd = ap_issue[2:0];
+  assign ap_valid = ap_issue[3];
+
+  always @(posedge clk_x1) begin
+    if (rst_x1) begin
+      state <= STATE_INIT;
+      x1_ready <= 1'b0;
+      ap_issue <= CMD_NOP;
+    end else begin
+      case (state)
+
+        // Wait for DDR3 calibration to complete
+        STATE_INIT: begin
+          cmd_issue <= CMD_NOP;
+
+          if (init_calib_complete) begin
+            state <= STATE_IDLE;
+            x1_ready <= 1'b1;
+          end else begin
+            x1_ready <= 1'b0;
+          end
+        end
+
+        // Wait for DDR3 commands (from USB)
+        STATE_IDLE: begin
+          x1_ready <= 1'b1;
+
+          if (x1_valid && x1_ready) begin
+            x1_addr[14:8] <= x1_data[6:0];
+
+            if (x1_data[7]) begin
+              state <= STATE_WADR;
+            end else begin
+              state <= STATE_RADR;
+            end
+          end
+        end
+
+        // -- DDR3 Read-Data States -- //
+
+        // Read the low byte of the read-address
+        STATE_RADR: begin
+          if (x1_valid && x1_ready) begin
+            x1_ready <= 1'b0;
+
+            state <= STATE_READ;
+
+            ap_addr[7:0] <= x1_data[7:0];
+            ap_issue <= CMD_FETCH;
+          end
+
+          if (x1_valid && x1_ready && !x1_last) begin
+            $error("Invalid READ command");
+          end
+        end
+
+        // Issue the read command to the DDR3 controller, then wait ...
+        STATE_READ: begin
+          if (ap_ready) begin
+            ap_issue <= CMD_NOP;
+            state <= STATE_WAIT;
+          end
+        end
+
+        // Assert the read-ready signal until all data has been received
+        STATE_RDAT: begin
+          if (rd_valid && rd_last) begin
+            state <= STATE_IDLE;
+            x1_ready <= 1'b1;
+          end
+        end
+
+        // -- DDR3 Write-Data States -- //
+
+        // Read the low byte of the write-address
+        STATE_WADR: begin
+          if (x1_valid && x1_ready) begin
+            x1_addr[7:0] <= x1_data[7:0];
+            state <= STATE_WDAT;
+          end
+        end
+
+        // Receive data from the USB FIFO, and assemble the write-data
+        STATE_WDAT: begin
+          if (x1_valid && x1_ready) begin
+            ap_data[127:0] <= {ap_data[119:0], x1_data[7:0]};
+
+            if (x1_last) begin
+              state <= STATE_WRIT;
+
+              ap_issue <= CMD_WRITE;
+
+              wr_valid <= 1'b1;
+              wr_last <= 1'b1;
+            end
+          end
+        end
+
+        // Issue the write command to the DDR3 controller, and send the write-
+        // data.
+        STATE_WRIT: begin
+          if (ap_ready) begin
+            ap_issue <= CMD_NOP;
+          end
+
+          if (wr_ready && wr_valid && wr_last) begin
+            state <= STATE_IDLE;
+            x1_ready <= 1'b1;
+
+            wr_valid <= 1'b0;
+            wr_last <= 1'b0;
+          end
+        end
+
+        default: begin
+          $error("Time to go home");
+          x1_ready <= 1'b0;
+        end
+      endcase
+    end
+  end
+
+
   // -- Yucky DDR3 SDRAM core from GoWin -- //
 
-reg [5:0] app_burst_number; // ??
-reg [26:0] ap_addr;
-reg [2:0] ap_cmd;
-reg ap_valid;
-wire ap_ready;
-
-reg wr_valid, wr_last;
-wire wr_ready;
-reg [15:0] wr_stb_n;
-reg [127:0] wr_data;
-
-wire rd_valid, rd_last;
-wire [127:0] rd_data;
-
-wire init_calib_complete;
-
-always @(posedge clk_x1) begin
-  if (!rst_n) begin
-    wr_valid <= 1'b0;
-    wr_stb_n <= 16'h0000;
-  end
-end
-
-always @(posedge clk_x1) begin
-  if (!rst_n) begin
-    app_burst_number <= 6'h00;
-    ap_addr <= 27'h0000000;
-    ap_cmd <= 3'h0;
-    ap_valid <= 1'b0;
-  end else begin
-    ap_cmd <= ap_cmd;
-  end
-end
-
-
   DDR3_Memory_Interface_Top ddr3_inst (
-      .clk(clk_26),  // from on-board oscillator
-      .rst_n(rst_n), // global reset
+      .clk  (clk_26),  // from on-board oscillator
+      .rst_n(rst_n),   // global reset
 
       .memory_clk(ddr_clk),
-      .pll_lock(ddr_lock),
+      .pll_lock  (ddr_lock),
 
-      .app_burst_number(app_burst_number),
+      .app_burst_number(ap_blength),
       .cmd_ready(ap_ready),
       .cmd(ap_cmd),
       .cmd_en(ap_valid),
-      .addr({1'b0, ap_addr}),
+      .addr({13'h0000, ap_addr}),
 
       .wr_data_rdy(wr_ready),
       .wr_data(wr_data),
@@ -215,8 +398,8 @@ end
       .rd_data_valid(rd_valid),
       .rd_data_end(rd_last),
 
-      .sr_req(1'b0),
-      .sr_ack(),
+      .sr_req (1'b0),
+      .sr_ack (),
       .ref_req(1'b0),
       .ref_ack(),
 
