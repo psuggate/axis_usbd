@@ -8,12 +8,11 @@ pub const PRODUCT_ID: u16 = 0x0003;
 
 #[derive(Debug, PartialEq)]
 pub struct AxisUSB {
-    device_handle: DeviceHandle<Context>,
+    handle: DeviceHandle<Context>,
     interfaces: Vec<u8>,
-    bulk_ep_in: Endpoint,
-    bulk_ep_out: Endpoint,
-    product_label: String,
-    serial_number: String,
+    endpoint: Endpoint,
+    label: String,
+    serial: String,
     context: Context,
 }
 
@@ -22,9 +21,7 @@ pub struct Endpoint {
     pub config: u8,
     pub interface: u8,
     pub setting: u8,
-    pub address_in: u8,
-    pub address_out: u8,
-    // pub address: u8,
+    pub address: u8,
     pub has_driver: bool,
 }
 
@@ -59,8 +56,7 @@ impl Endpoint {
             config: cfg,
             interface: ix.interface_number(),
             setting: ix.setting_number(),
-            address_in: 0u8,
-            address_out: 0u8,
+            address: 0u8,
             has_driver: false,
         }
     }
@@ -69,15 +65,13 @@ impl Endpoint {
 pub fn find_interfaces<T: UsbContext>(
     device: &mut Device<T>,
     descriptor: &DeviceDescriptor,
-    handle: &DeviceHandle<T>,
-    transfer_type: TransferType,
-    direction: Direction,
 ) -> Vec<u8> {
     let numcfg = descriptor.num_configurations();
-    let config: ConfigDescriptor = (0..numcfg).find_map(|n| device.config_descriptor(n).ok())?;
+    let config: ConfigDescriptor = (0..numcfg)
+        .find_map(|n| device.config_descriptor(n).ok())
+        .unwrap();
 
     let mut interfaces = Vec::new();
-
     for ix in config.interfaces().flat_map(|i| i.descriptors()) {
         interfaces.push(ix.interface_number());
     }
@@ -98,7 +92,6 @@ pub fn find_endpoint<T: UsbContext>(
 
     for ix in config.interfaces().flat_map(|i| i.descriptors()) {
         let ix_num: u8 = ix.interface_number();
-        let mut endpoint = Endpoint::new(config.number(), &ix);
 
         for ep in ix.endpoint_descriptors() {
             if ep.transfer_type() == transfer_type && ep.direction() == direction {
@@ -115,26 +108,6 @@ pub fn find_endpoint<T: UsbContext>(
         }
     }
 
-    /*
-    for interface in config.interfaces() {
-        for ix in interface.descriptors() {
-            let ix_num: u8 = ix.interface_number();
-            for ep in ix.endpoint_descriptors() {
-                if ep.transfer_type() == transfer_type && ep.direction() == direction {
-                    let has_driver: bool = handle.kernel_driver_active(ix_num).unwrap_or(false);
-
-                    return Some(Endpoint {
-                        config: config.number(),
-                        interface: ix_num,
-                        setting: ix.setting_number(),
-                        address: ep.address(),
-                        has_driver,
-                    });
-                }
-            }
-        }
-    }
-    */
     None
 }
 
@@ -179,17 +152,17 @@ pub fn find_axis_usb(context: &Context) -> Result<Device<Context>, rusb::Error> 
 impl AxisUSB {
     pub fn open(device: &mut Device<Context>, context: Context) -> Result<AxisUSB, rusb::Error> {
         let descriptor = device.device_descriptor()?;
-        let mut device_handle = device.open()?;
+        let mut handle = device.open()?;
         println!("AXIS USB opened ...");
 
-        let product_label = device_handle.read_product_string_ascii(&descriptor)?;
-        let serial_number = device_handle.read_serial_number_string_ascii(&descriptor)?;
+        let label = handle.read_product_string_ascii(&descriptor)?;
+        let serial = handle.read_serial_number_string_ascii(&descriptor)?;
 
         let mut interfaces: Vec<u8> = Vec::with_capacity(2);
         let ep_in = find_endpoint(
             device,
             &descriptor,
-            &device_handle,
+            &handle,
             TransferType::Bulk,
             Direction::In,
         )
@@ -200,51 +173,44 @@ impl AxisUSB {
         let ep_out = find_endpoint(
             device,
             &descriptor,
-            &device_handle,
+            &handle,
             TransferType::Bulk,
             Direction::Out,
         )
         .ok_or(rusb::Error::NotFound)?;
-        configure_endpoint(&mut device_handle, &ep_in)?;
+
+        configure_endpoint(&mut handle, &ep_in)?;
         if ep_in.interface != ep_out.interface {
             interfaces.push(ep_out.interface);
-            configure_endpoint(&mut device_handle, &ep_out)?;
+            configure_endpoint(&mut handle, &ep_out)?;
         }
         println!(" - OUT (bulk) endpoint found");
 
         Ok(Self {
-            device_handle,
+            handle,
             interfaces,
-            bulk_ep_in: ep_in,
-            bulk_ep_out: ep_out,
-            product_label,
-            serial_number,
+            endpoint: ep_in,
+            label,
+            serial,
             context,
         })
     }
 
     pub fn product(&self) -> String {
-        self.product_label.clone()
+        self.label.clone()
     }
 
     pub fn serial_number(&self) -> String {
-        self.serial_number.clone()
+        self.serial.clone()
     }
 }
 
 impl Drop for AxisUSB {
     fn drop(&mut self) {
-        if self.bulk_ep_in.has_driver {
+        if self.endpoint.has_driver {
             eprintln!("Re-attaching kernel driver !!");
-            self.device_handle
-                .attach_kernel_driver(self.bulk_ep_in.interface)
-                .unwrap();
-        }
-
-        if self.bulk_ep_out.has_driver {
-            eprintln!("Re-attaching kernel driver !!");
-            self.device_handle
-                .attach_kernel_driver(self.bulk_ep_out.interface)
+            self.handle
+                .attach_kernel_driver(self.endpoint.interface)
                 .unwrap();
         }
     }

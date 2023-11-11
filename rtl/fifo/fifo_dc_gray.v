@@ -195,7 +195,6 @@ always @(posedge wr_clk or posedge clr)
 	
 	// This is a block of distributed RAM for the FIFO.
 	// synthesis attribute ram_style of mem is distributed ;
-	// pragma attribute mem ram_block FALSE ;
 	reg	[dw-1:0]	mem [0:as-1];
 	
 	always @(posedge wr_clk)
