@@ -47,6 +47,7 @@ module bulk_ep_axis_bridge #(
     /* Status flags */
     output wire fifo_in_full_o,
     output wire fifo_out_full_o,
+    output wire fifo_has_data_o,
     output wire usb_sof_o,
 
     /* ULPI */
@@ -169,6 +170,7 @@ module bulk_ep_axis_bridge #(
   wire ep_blk_xfer_out_data_valid;
   wire ep_blk_xfer_out_data_last;
 
+  assign fifo_has_data_o = ep_blk_xfer_in_has_data;
   assign usb_sof_o = usb_sof;
 
   usb_tlp #(

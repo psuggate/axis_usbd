@@ -132,7 +132,7 @@ module bulk_ep_in (
 
   axis_afifo #(
       .WIDTH(8),
-      .ABITS(5)
+      .ABITS(4)
   ) axis_afifo_inst (
       .s_aresetn(reset_n),
 

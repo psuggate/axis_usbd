@@ -46,21 +46,30 @@ fn axis_usb(args: Args) -> Result<(), rusb::Error> {
         info!("RECEIVED (bytes = {}): {:?}", bytes.len(), &bytes);
     }
 
-    let wrcmd: [u8; 5] = [0x03, 0xb0, 0x00, 0x00, 0x10];
-    let num = axis_usb.write(&wrcmd)?;
-    info!("WRITTEN (bytes = {}): {:?}", num, &wrcmd);
+    // let wrcmd: [u8; 5] = [0x03, 0xb0, 0x00, 0x00, 0x10];
+    // let num = axis_usb.write(&wrcmd)?;
+    // info!("WRITTEN (bytes = {}): {:?}", num, &wrcmd);
 
-    let wrdat: [u8; 16] = [
+    let wrdat: [u8; 24] = [
         0xff, 0x5a, 0xc3, 0x2d, 0x03, 0xb0, 0x00, 0x10, 0x03, 0xb0, 0x00, 0x10, 0xff, 0x5a, 0xc3,
-        0x2d,
+        0x2d, 0xff, 0x80, 0x08, 0x3c, 0xa5, 0xc3, 0x5a, 0x99,
     ];
     // let wrdat: Vec<u8> = wrdat[0..12].to_owned();
+    let wrdat: Vec<u8> = wrdat[0..20].to_owned().repeat(32);
     let num = axis_usb.write(&wrdat)?;
     info!("WRITTEN (bytes = {}): {:?}", num, &wrdat);
+    /*
+        let num = axis_usb.write(&wrdat)?;
+        info!("WRITTEN (bytes = {}): {:?}", num, &wrdat);
+        let num = axis_usb.write(&wrdat)?;
+        info!("WRITTEN (bytes = {}): {:?}", num, &wrdat);
+        let num = axis_usb.write(&wrdat)?;
+        info!("WRITTEN (bytes = {}): {:?}", num, &wrdat);
+    */
 
-    let rdcmd: [u8; 5] = [0x03, 0x30, 0x00, 0x00, 0x10];
-    let num = axis_usb.write(&rdcmd)?;
-    info!("WRITTEN (bytes = {}): {:?}", num, &rdcmd);
+    // let rdcmd: [u8; 5] = [0x03, 0x30, 0x00, 0x00, 0x10];
+    // let num = axis_usb.write(&rdcmd)?;
+    // info!("WRITTEN (bytes = {}): {:?}", num, &rdcmd);
 
     let bytes: Vec<u8> = axis_usb.try_read(None)?;
     info!("RECEIVED (bytes = {}): {:?}", bytes.len(), &bytes);
