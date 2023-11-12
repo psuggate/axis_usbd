@@ -44,6 +44,11 @@ module bulk_ep_axis_bridge #(
     input wire sys_clk,
     input wire reset_n,
 
+    /* Status flags */
+    output wire fifo_in_full_o,
+    output wire fifo_out_full_o,
+    output wire usb_sof_o,
+
     /* ULPI */
     input wire [7:0] ulpi_data_in,
     output wire [7:0] ulpi_data_out,
@@ -164,25 +169,7 @@ module bulk_ep_axis_bridge #(
   wire ep_blk_xfer_out_data_valid;
   wire ep_blk_xfer_out_data_last;
 
-  wire [7:0] ep1_in_axis_tdata;
-  wire ep1_in_axis_tvalid;
-  wire ep1_in_axis_tready;
-  wire ep1_in_axis_tlast;
-
-  wire [7:0] ep1_out_axis_tdata;
-  wire ep1_out_axis_tvalid;
-  wire ep1_out_axis_tready;
-  wire ep1_out_axis_tlast;
-
-  assign ep1_in_axis_tdata = s_axis_tdata;
-  assign ep1_in_axis_tvalid = s_axis_tvalid;
-  assign s_axis_tready = ep1_in_axis_tready;
-  assign ep1_in_axis_tlast = s_axis_tlast;
-
-  assign m_axis_tvalid = ep1_out_axis_tvalid;
-  assign ep1_out_axis_tready = m_axis_tready;
-  assign m_axis_tdata = ep1_out_axis_tdata;
-  assign m_axis_tlast = ep1_out_axis_tlast;
+  assign usb_sof_o = usb_sof;
 
   usb_tlp #(
       .VENDOR_ID(VENDOR_ID),
@@ -294,11 +281,13 @@ module bulk_ep_axis_bridge #(
   ) bulk_ep_in_inst (
       .reset_n(reset_n),
 
+      .status_full_o(fifo_in_full_o),
+
       .axis_aclk    (sys_clk),
-      .axis_tvalid_i(ep1_in_axis_tvalid),
-      .axis_tready_o(ep1_in_axis_tready),
-      .axis_tlast_i (ep1_in_axis_tlast),
-      .axis_tdata_i (ep1_in_axis_tdata),
+      .axis_tvalid_i(s_axis_tvalid),
+      .axis_tready_o(s_axis_tready),
+      .axis_tlast_i (s_axis_tlast),
+      .axis_tdata_i (s_axis_tdata),
 
       .bulk_ep_in_clock(usb_clk),
       .bulk_ep_in_xfer_i(ep_blk_in_xfer),
@@ -315,6 +304,8 @@ module bulk_ep_axis_bridge #(
   ) bulk_ep_out_inst (
       .reset_n(reset_n),
 
+      .status_full_o(fifo_out_full_o),
+
       .bulk_ep_out_clock(usb_clk),
       .bulk_ep_out_xfer_i(ep_blk_out_xfer),
       .bulk_ep_out_ready_read_o(ep_blk_xfer_out_ready_read),
@@ -324,10 +315,10 @@ module bulk_ep_axis_bridge #(
       .bulk_ep_out_tdata_i(ep_blk_xfer_out_data),
 
       .axis_aclk    (sys_clk),
-      .axis_tvalid_o(ep1_out_axis_tvalid),
-      .axis_tready_i(ep1_out_axis_tready),
-      .axis_tlast_o (ep1_out_axis_tlast),
-      .axis_tdata_o (ep1_out_axis_tdata)
+      .axis_tvalid_o(m_axis_tvalid),
+      .axis_tready_i(m_axis_tready),
+      .axis_tlast_o (m_axis_tlast),
+      .axis_tdata_o (m_axis_tdata)
   );
 
 endmodule  // bulk_ep_axis_bridge

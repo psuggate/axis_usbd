@@ -33,6 +33,8 @@ module bulk_ep_out #(
 ) (
     input  wire reset_n,
 
+    output wire status_full_o,
+
     input  wire bulk_ep_out_clock,
     input  wire bulk_ep_out_xfer_i, // todo: also unconnected in original ...
     output wire bulk_ep_out_ready_read_o,
@@ -49,22 +51,46 @@ module bulk_ep_out #(
     output wire [7:0] axis_tdata_o
 );
 
-  wire prog_full;
+  reg status_full;
   reg  blk_xfer_out_ready_read_out;
+  wire prog_full;
 
+  assign status_full_o = status_full;
+  assign bulk_ep_out_ready_read_o = blk_xfer_out_ready_read_out;
+/*
   // todo: ...
   assign prog_full = bulk_ep_out_tready_o;
-  assign bulk_ep_out_ready_read_o = blk_xfer_out_ready_read_out;
 
-  /* Full Latch */
+  // Full Latch //
   always @(posedge bulk_ep_out_clock) begin
     // todo: WTF !?
     blk_xfer_out_ready_read_out <= ~prog_full;
   end
+*/
+
+  assign prog_full = ~bulk_ep_out_tready_o | bulk_ep_out_tvalid_i & bulk_ep_out_tlast_i;
+
+  always @(posedge bulk_ep_out_clock) begin
+    if (!reset_n) begin
+      status_full <= 1'b0;
+    end else begin
+      status_full <= prog_full;
+    end
+  end
+
+always @(posedge bulk_ep_out_clock) begin
+  if (!reset_n || bulk_ep_out_xfer_i) begin
+    blk_xfer_out_ready_read_out <= 1'b1;
+  end else if (prog_full) begin
+    blk_xfer_out_ready_read_out <= 1'b0;
+  end else begin
+    blk_xfer_out_ready_read_out <= blk_xfer_out_ready_read_out;
+  end
+end
 
   axis_afifo #(
       .WIDTH(8),
-      .ABITS(4)
+      .ABITS(5)
   ) axis_afifo_inst (
       .s_aresetn(reset_n),
 

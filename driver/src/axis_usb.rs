@@ -1,10 +1,11 @@
-use rusb::{
-    ConfigDescriptor, Context, Device, DeviceDescriptor, DeviceHandle, Direction,
-    InterfaceDescriptor, TransferType, UsbContext,
-};
+use log::{debug, error, info, warn};
+use rusb::{Context, Device, DeviceHandle, Direction, TransferType};
+use std::time::Duration;
 
-pub const VENDOR_ID: u16 = 0xF4CE;
-pub const PRODUCT_ID: u16 = 0x0003;
+pub use crate::common::find_axis_usb;
+use crate::common::*;
+
+pub const TRANSFER_LENGTH_REGISTER: u16 = 0x01u16;
 
 #[derive(Debug, PartialEq)]
 pub struct AxisUSB {
@@ -16,144 +17,11 @@ pub struct AxisUSB {
     context: Context,
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub struct Endpoint {
-    pub config: u8,
-    pub interface: u8,
-    pub setting: u8,
-    pub address: u8,
-    pub has_driver: bool,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct Interface {
-    pub configuration: u8,
-    pub number: u8,
-    pub alternate_setting: u8,
-    pub has_driver: bool,
-}
-
-pub fn configure_interface<T: UsbContext>(
-    handle: &mut DeviceHandle<T>,
-    interface: &Interface,
-) -> rusb::Result<()> {
-    if interface.has_driver {
-        eprintln!("USB device has a kernel driver loaded, attempting to detach ...");
-        handle.detach_kernel_driver(interface.number).ok();
-    }
-    // println!("{:#?}", endpoint);
-
-    handle.set_active_configuration(interface.configuration)?;
-    handle.claim_interface(interface.number)?;
-    handle.set_alternate_setting(interface.number, interface.alternate_setting)?;
-
-    Ok(())
-}
-
-impl Endpoint {
-    pub fn new(cfg: u8, ix: &InterfaceDescriptor) -> Self {
-        Self {
-            config: cfg,
-            interface: ix.interface_number(),
-            setting: ix.setting_number(),
-            address: 0u8,
-            has_driver: false,
-        }
-    }
-}
-
-pub fn find_interfaces<T: UsbContext>(
-    device: &mut Device<T>,
-    descriptor: &DeviceDescriptor,
-) -> Vec<u8> {
-    let numcfg = descriptor.num_configurations();
-    let config: ConfigDescriptor = (0..numcfg)
-        .find_map(|n| device.config_descriptor(n).ok())
-        .unwrap();
-
-    let mut interfaces = Vec::new();
-    for ix in config.interfaces().flat_map(|i| i.descriptors()) {
-        interfaces.push(ix.interface_number());
-    }
-
-    interfaces
-}
-
-pub fn find_endpoint<T: UsbContext>(
-    device: &mut Device<T>,
-    descriptor: &DeviceDescriptor,
-    handle: &DeviceHandle<T>,
-    transfer_type: TransferType,
-    direction: Direction,
-) -> Option<Endpoint> {
-    let numcfg = descriptor.num_configurations();
-    let config: ConfigDescriptor = (0..numcfg).find_map(|n| device.config_descriptor(n).ok())?;
-    // println!("Found '{}' configuration descriptors", numcfg);
-
-    for ix in config.interfaces().flat_map(|i| i.descriptors()) {
-        let ix_num: u8 = ix.interface_number();
-
-        for ep in ix.endpoint_descriptors() {
-            if ep.transfer_type() == transfer_type && ep.direction() == direction {
-                let has_driver: bool = handle.kernel_driver_active(ix_num).unwrap_or(false);
-
-                return Some(Endpoint {
-                    config: config.number(),
-                    interface: ix_num,
-                    setting: ix.setting_number(),
-                    address: ep.address(),
-                    has_driver,
-                });
-            }
-        }
-    }
-
-    None
-}
-
-pub fn configure_endpoint<T: UsbContext>(
-    handle: &mut DeviceHandle<T>,
-    endpoint: &Endpoint,
-) -> rusb::Result<()> {
-    if endpoint.has_driver {
-        eprintln!("USB device has a kernel driver loaded, attempting to detach ...");
-        handle.detach_kernel_driver(endpoint.interface).ok();
-    }
-    // println!("{:#?}", endpoint);
-
-    handle.set_active_configuration(endpoint.config)?;
-    handle.claim_interface(endpoint.interface)?;
-    handle.set_alternate_setting(endpoint.interface, endpoint.setting)?;
-
-    Ok(())
-}
-
-pub fn find_axis_usb(context: &Context) -> Result<Device<Context>, rusb::Error> {
-    if let Ok(devices) = context.devices() {
-        return devices
-            .iter()
-            .find_map(|ref device| {
-                let descriptor = device.device_descriptor().ok()?;
-                let vid: u16 = descriptor.vendor_id();
-                let pid: u16 = descriptor.product_id();
-                println!("Vendor ID: 0x{:04x}, Product ID: 0x{:04x}", vid, pid);
-
-                if descriptor.vendor_id() == VENDOR_ID && descriptor.product_id() == PRODUCT_ID {
-                    Some(device.to_owned())
-                } else {
-                    None
-                }
-            })
-            .ok_or(rusb::Error::NotFound);
-    }
-    Err(rusb::Error::NotFound)
-}
-
 impl AxisUSB {
     pub fn open(device: &mut Device<Context>, context: Context) -> Result<AxisUSB, rusb::Error> {
         let descriptor = device.device_descriptor()?;
         let mut handle = device.open()?;
-        println!("AXIS USB opened ...");
+        info!("AXIS USB opened ...");
 
         let label = handle.read_product_string_ascii(&descriptor)?;
         let serial = handle.read_serial_number_string_ascii(&descriptor)?;
@@ -168,7 +36,7 @@ impl AxisUSB {
         )
         .ok_or(rusb::Error::NotFound)?;
         interfaces.push(ep_in.interface);
-        println!(" - IN (bulk) endpoint found");
+        info!(" - IN (bulk) endpoint found");
 
         let ep_out = find_endpoint(
             device,
@@ -179,17 +47,24 @@ impl AxisUSB {
         )
         .ok_or(rusb::Error::NotFound)?;
 
-        configure_endpoint(&mut handle, &ep_in)?;
-        if ep_in.interface != ep_out.interface {
+        if ep_in.interface == ep_out.interface {
+            debug!(
+                "Both USB endpoints share the same interface ('{}')",
+                ep_in.interface
+            );
+            configure_endpoints(&mut handle, &ep_in, &ep_out)?;
+        } else {
+            configure_endpoint(&mut handle, &ep_in)?;
             interfaces.push(ep_out.interface);
             configure_endpoint(&mut handle, &ep_out)?;
         }
-        println!(" - OUT (bulk) endpoint found");
+        info!(" - OUT (bulk) endpoint found");
 
         Ok(Self {
             handle,
             interfaces,
             endpoint: ep_in,
+            // endpoint: ep_out,
             label,
             serial,
             context,
@@ -203,12 +78,52 @@ impl AxisUSB {
     pub fn serial_number(&self) -> String {
         self.serial.clone()
     }
+
+    pub fn try_read(&mut self, timeout: Option<Duration>) -> Result<Vec<u8>, rusb::Error> {
+        let timeout = timeout.unwrap_or(DEFAULT_TIMEOUT);
+        let mut buf = [0; MAX_BUF_SIZE];
+        debug!("READ (timeout: {} ms)", timeout.as_millis() as u32);
+        let len = self
+            .handle
+            .read_bulk(self.endpoint.read_address(), &mut buf, timeout)?;
+        debug!("RESPONSE (bytes = {}): {:?}", len, &buf[0..len]);
+        Ok(Vec::from(&buf[0..len]))
+    }
+
+    pub fn write(&mut self, bytes: &[u8]) -> Result<usize, rusb::Error> {
+        let len: u16 = bytes.len() as u16;
+        debug!("WRITE (bytes = {}): {:?}", len, bytes);
+        /*
+        // let lenbuf: [u8; 2] = [(len & 0xff) as u8, (len >> 8) as u8];
+        let lenbuf: [u8; 2] = [(len >> 8) as u8, (len & 0xff) as u8]; // big Endian
+        let res = self.handle.write_control(
+            0x0u8,
+            0x1u8,
+            // rusb::Recipient::Interface as u8, // 0x1u8,
+            TRANSFER_LENGTH_REGISTER,
+            0x0u16, // index
+            &lenbuf,
+            DEFAULT_TIMEOUT,
+        );
+        match res {
+            Ok(num) => {
+                debug!("WROTE {} bytes to TRANSFER_LENGTH_REGISTER", num);
+            }
+            Err(e) => {
+                error!("Failed to set TRANSFER_LENGTH_REGISTER: {:?}", e);
+                Err(e)?;
+            }
+        }
+        */
+        self.handle
+            .write_bulk(self.endpoint.write_address(), bytes, DEFAULT_TIMEOUT)
+    }
 }
 
 impl Drop for AxisUSB {
     fn drop(&mut self) {
         if self.endpoint.has_driver {
-            eprintln!("Re-attaching kernel driver !!");
+            warn!("Re-attaching kernel driver !!");
             self.handle
                 .attach_kernel_driver(self.endpoint.interface)
                 .unwrap();

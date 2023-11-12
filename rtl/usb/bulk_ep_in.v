@@ -30,6 +30,8 @@
 module bulk_ep_in (
     reset_n,
 
+    status_full_o,
+
     axis_aclk,
     axis_tvalid_i,
     axis_tready_o,
@@ -50,6 +52,8 @@ module bulk_ep_in (
   parameter FPGA_FAMILY = "7series";
 
   input wire reset_n;
+
+  output wire status_full_o;
 
   input wire axis_aclk;
   input wire axis_tvalid_i;
@@ -73,11 +77,22 @@ module bulk_ep_in (
   wire prog_full;
   wire was_last_usb;
   wire prog_full_usb;
+  reg status_full;
   reg was_last;
   reg bulk_xfer_in_has_data_out;
 
+  assign status_full_o = status_full;
   assign bulk_ep_in_has_data_o = bulk_xfer_in_has_data_out;
+
   assign prog_full = ~axis_tready_o;
+
+  always @(posedge axis_aclk) begin
+    if (!reset_n) begin
+      status_full <= 1'b0;
+    end else begin
+      status_full <= prog_full;
+    end
+  end
 
   always @(posedge bulk_ep_in_clock) begin
     if (reset_n == 1'b0) begin
@@ -117,7 +132,7 @@ module bulk_ep_in (
 
   axis_afifo #(
       .WIDTH(8),
-      .ABITS(4)
+      .ABITS(5)
   ) axis_afifo_inst (
       .s_aresetn(reset_n),
 

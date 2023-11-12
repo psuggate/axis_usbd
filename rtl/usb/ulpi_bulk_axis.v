@@ -18,6 +18,11 @@ module ulpi_bulk_axis (
     aclk,
     aresetn,
 
+    /* Status flags */
+    fifo_in_full_o,
+    fifo_out_full_o,
+    usb_sof_o,
+
     s_axis_tvalid_i,
     s_axis_tready_o,
     s_axis_tlast_i,
@@ -57,6 +62,11 @@ module ulpi_bulk_axis (
   /* AXI4-Stream Interface */
   input wire aclk;
   input wire aresetn;
+
+  /* Status flags */
+  output wire fifo_in_full_o;
+  output wire fifo_out_full_o;
+  output wire usb_sof_o;
 
   input wire s_axis_tvalid_i;
   output wire s_axis_tready_o;
@@ -141,6 +151,10 @@ module ulpi_bulk_axis (
   ) bulk_ep_axis_bridge_inst (
       .sys_clk(aclk),
       .reset_n(aresetn),
+
+      .fifo_in_full_o(fifo_in_full_o),
+      .fifo_out_full_o(fifo_out_full_o),
+      .usb_sof_o    (usb_sof_o),
 
       .ulpi_clk     (ulpi_clock_i),
       .ulpi_reset   (ulpi_reset_o),
