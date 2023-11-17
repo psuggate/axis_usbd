@@ -1,4 +1,4 @@
-use log::{debug, error, info, warn};
+use log::{debug, info, warn};
 use rusb::{Context, Device, DeviceHandle, Direction, TransferType};
 use std::time::Duration;
 

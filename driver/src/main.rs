@@ -14,6 +14,12 @@ struct Args {
     #[arg(short, long, default_value = "false")]
     read_first: bool,
 
+    #[arg(short, long, default_value = "20")]
+    size: usize,
+
+    #[arg(short, long, default_value = "32")]
+    chunks: usize,
+
     /// Verbosity of generated output?
     #[arg(short, long, action = clap::ArgAction::Count)]
     verbose: u8,
@@ -38,9 +44,9 @@ fn axis_usb(args: Args) -> Result<(), rusb::Error> {
         // let bytes: Vec<u8> = axis_usb.try_read(None)?;
         // info!("RECEIVED (bytes = {}): {:?}", bytes.len(), &bytes);
 
-        let rdcmd: [u8; 5] = [0x03, 0x30, 0x00, 0x00, 0x10];
-        let num = axis_usb.write(&rdcmd)?;
-        info!("WRITTEN (bytes = {}): {:?}", num, &rdcmd);
+        // let rdcmd: [u8; 5] = [0x03, 0x30, 0x00, 0x00, 0x10];
+        // let num = axis_usb.write(&rdcmd)?;
+        // info!("WRITTEN (bytes = {}): {:?}", num, &rdcmd);
 
         let bytes: Vec<u8> = axis_usb.try_read(None).unwrap_or(Vec::new());
         info!("RECEIVED (bytes = {}): {:?}", bytes.len(), &bytes);
@@ -55,7 +61,10 @@ fn axis_usb(args: Args) -> Result<(), rusb::Error> {
         0x2d, 0xff, 0x80, 0x08, 0x3c, 0xa5, 0xc3, 0x5a, 0x99,
     ];
     // let wrdat: Vec<u8> = wrdat[0..12].to_owned();
-    let wrdat: Vec<u8> = wrdat[0..20].to_owned().repeat(32);
+    // let wrdat: Vec<u8> = wrdat[0..16].to_owned().repeat(2);
+    // let wrdat: Vec<u8> = wrdat[0..20].to_owned().repeat(32);
+    let wrdat: Vec<u8> = wrdat[0..args.size].to_owned().repeat(args.chunks);
+    // let wrdat: Vec<u8> = wrdat[0..20].to_owned().repeat(16);
     let num = axis_usb.write(&wrdat)?;
     info!("WRITTEN (bytes = {}): {:?}", num, &wrdat);
     /*
