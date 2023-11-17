@@ -81,13 +81,14 @@ module bulk_ep_in (
   reg was_last;
   reg bulk_xfer_in_has_data_out;
 
+`define __small_potatoes
 `ifdef __small_potatoes
 
   assign prog_full = ~axis_tready_o;
 
 `else
 
-  wire [10:0] level_w;
+  wire [11:0] level_w;
   wire prog_full_w = level_w > 64;
   reg prog_full_q;
 
@@ -146,14 +147,17 @@ module bulk_ep_in (
     end
   end
 
-`define __no_potatoes
+// `define __no_potatoes
 `ifdef __no_potatoes
 
   axis_async_fifo #(
+`ifdef __small_potatoes
+      .DEPTH(16),
+      .RAM_PIPELINE(0),
+`else
       .DEPTH(2048),
       .RAM_PIPELINE(1),
-      // .DEPTH(16),
-      // .RAM_PIPELINE(0),
+`endif
       .DATA_WIDTH(8),
       .KEEP_ENABLE(0),
       .KEEP_WIDTH(1),
@@ -229,7 +233,6 @@ module bulk_ep_in (
       .m_tlast_o(bulk_ep_in_tlast_o),
       .m_tdata_o(bulk_ep_in_tdata_o)
   );
-*/
 
 `else
 

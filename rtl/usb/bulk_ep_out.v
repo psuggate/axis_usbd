@@ -65,6 +65,7 @@ module bulk_ep_out #(
     end
   end
 
+`define __small_potatoes
 `ifdef __small_potatoes
   // SRAM too small to properly determine "level" ...
   wire prog_full;
@@ -83,7 +84,7 @@ module bulk_ep_out #(
 
 `else
 
-  wire [10:0] level_w;
+  wire [11:0] level_w;
   wire prog_full_w = level_w > 960;
 
   always @(posedge bulk_ep_out_clock) begin
@@ -93,14 +94,17 @@ module bulk_ep_out #(
 `endif
 
 
-`define __no_potatoes
+// `define __no_potatoes
 `ifdef __no_potatoes
 
   axis_async_fifo #(
+`ifdef __small_potatoes
+      .DEPTH(16),
+      .RAM_PIPELINE(0),
+`else
       .DEPTH(2048),
       .RAM_PIPELINE(1),
-      // .DEPTH(16),
-      // .RAM_PIPELINE(0),
+`endif
       .DATA_WIDTH(8),
       .KEEP_ENABLE(0),
       .KEEP_WIDTH(1),
