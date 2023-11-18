@@ -99,14 +99,13 @@ module usb_ulpi #(
   reg [3:0] state, snext;
 
   reg dir_q, stp_q;
+  reg buf_valid, buf_last;
   reg [7:0] reg_data;
   reg [7:0] buf_data;
-  reg buf_valid, buf_last;
 
+  reg rx_err;
   wire [3:0] tx_pid;
   wire tx_eop;
-  wire bus_tx_ready_w;
-  wire tx_ready_w;
 
   reg [2:0] chirp_kj_counter;
   reg hs_enabled = 1'b0;
@@ -131,23 +130,19 @@ module usb_ulpi #(
   assign axis_rx_tlast_o = rx_tlast;
   assign axis_rx_tdata_o = rx_tdata;
 
-  // assign axis_tx_tready_o = tx_ready_w;
   assign axis_tx_tready_o = tx_ready;
 
-  // todo: should this be registered ??
-  assign ulpi_stp = ulpi_dir && !axis_rx_tready_i || state == STATE_STP;
+  assign ulpi_stp = stp_q;
   assign ulpi_reset = rst_n;
   assign ulpi_data_out = ulpi_data_out_buf;
 
   assign usb_vbus_valid_o = usb_vbus_valid_out;
   assign usb_reset_o = usb_reset_out;
-  assign usb_idle_o = (state == STATE_IDLE) ? 1'b1 : 1'b0;
-  assign usb_suspend_o = (state == STATE_SUSPEND) ? 1'b1 : 1'b0;
+  assign usb_idle_o = state == STATE_IDLE;
+  assign usb_suspend_o = state == STATE_SUSPEND;
 
 
-  // -- Errors in this ULPI Core -- //
-
-  reg rx_err;
+  // -- Status & Errors in this ULPI Core -- //
 
   assign ulpi_rx_overflow_o = rx_err;
 
@@ -156,6 +151,13 @@ module usb_ulpi #(
       rx_err <= 1'b0;
     end else if (rx_tvalid && !axis_rx_tready_i) begin
       rx_err <= 1'b1;
+    end
+  end
+
+  // PHY is driving, and for an 'RX CMD', update bus-status
+  always @(posedge ulpi_clk) begin
+    if (dir_q && ulpi_dir && !ulpi_nxt) begin
+      usb_vbus_valid_out <= ulpi_data_in[3:2] == 2'b11;
     end
   end
 
@@ -204,38 +206,29 @@ module usb_ulpi #(
   end
 
   always @(posedge ulpi_clk) begin
-    if (!rst_n) begin
-      hs_enabled <= 1'b0;
-    end else begin
-      case (state)
-        STATE_SWITCH_FSSTART: begin
-          hs_enabled <= 1'b0;
-        end
-        STATE_CHIRPKJ: begin
-          hs_enabled <= 1'b1;
-        end
-        default: begin
-          hs_enabled <= hs_enabled;
-        end
-      endcase
-    end
+    case (state)
+      STATE_SWITCH_FSSTART: hs_enabled <= 1'b0;
+      STATE_CHIRPKJ: hs_enabled <= 1'b1;
+      default: hs_enabled <= hs_enabled;
+    endcase
   end
 
-  // PHY is driving, and for an 'RX CMD', update bus-status
   always @(posedge ulpi_clk) begin
-    if (dir_q && ulpi_dir && !ulpi_nxt) begin
-      usb_vbus_valid_out <= ulpi_data_in[3:2] == 2'b11;
+    if (!dir_q && !ulpi_dir) begin
+      case (state)
+        STATE_WRITE_REGD: stp_q <= ulpi_nxt;
+        STATE_TX_LAST: stp_q <= ulpi_nxt;
+        STATE_CHIRPK: stp_q <= state_counter > CHIRP_K_TIME;
+        default: stp_q <= 1'b0;
+      endcase
+    end else begin
+      stp_q <= ~axis_rx_tready_i & dir_q & ulpi_dir;
     end
   end
 
 
   // -- TX Flow Control -- //
 
-  assign tx_ready_w = bus_tx_ready_w && (state == STATE_IDLE || state == STATE_TX && !buf_valid);
-  assign bus_tx_ready_w = ~ulpi_dir & ~dir_q;
-
-  `define __salad_farmer
-`ifdef __salad_farmer
   always @(posedge ulpi_clk) begin
     if (dir_q || ulpi_dir) begin
       buf_valid <= 1'b0;
@@ -290,7 +283,6 @@ module usb_ulpi #(
       endcase
     end
   end
-`endif
 
 
   // -- Capture Incoming USB Packets -- //
@@ -298,7 +290,6 @@ module usb_ulpi #(
   always @(posedge ulpi_clk) begin
     if (dir_q && ulpi_dir && ulpi_nxt) begin
       packet_buf <= ulpi_data_in;
-
       if (!packet) begin
         rx_tvalid <= 1'b0;
         packet <= 1'b1;
@@ -323,13 +314,13 @@ module usb_ulpi #(
 
   always @(posedge ulpi_clk) begin
     if (dir_q || ulpi_dir) begin
-      // We are not driving
+      // We are not driving //
       state <= state;
       snext <= 'bx;
       ulpi_data_out_buf <= 'bx;
       reg_data <= 'bx;
     end else begin
-      // We are driving
+      // We are driving //
       case (state)
         default: begin  // STATE_INIT
           state <= STATE_WRITE_REGA;
@@ -377,15 +368,12 @@ module usb_ulpi #(
         end
 
         STATE_SUSPEND: begin
-          if (usb_line_state != 2'b01) begin
-            state <= STATE_IDLE;
-          end
+          state <= usb_line_state != 2'b01 ? STATE_IDLE : STATE_SUSPEND;
           snext <= 'bx;
           ulpi_data_out_buf <= 'bx;
           reg_data <= 'bx;
         end
 
-        // TODO: turn 'stp' into a register, and remove this state ?!?
         STATE_STP: begin
           state <= snext;
           snext <= 'bx;
@@ -402,7 +390,6 @@ module usb_ulpi #(
             ulpi_data_out_buf <= 'bx;
           end else if (axis_tx_tvalid_i) begin
             ulpi_data_out_buf <= {4'b0100, axis_tx_tdata_i[3:0]};
-            // buf_valid <= 1'b0;
 
             if (axis_tx_tlast_i) begin
               state <= STATE_TX_LAST;
@@ -417,27 +404,21 @@ module usb_ulpi #(
         STATE_TX: begin
           if (ulpi_nxt) begin
             if (axis_tx_tvalid_i && !buf_valid) begin
+              state <= axis_tx_tlast_i ? STATE_TX_LAST : STATE_TX;
               ulpi_data_out_buf <= axis_tx_tdata_i;
-
-              if (axis_tx_tlast_i) begin
-                state <= STATE_TX_LAST;
-              end
             end else if (buf_valid) begin
+              state <= buf_last ? STATE_TX_LAST : STATE_TX;
               ulpi_data_out_buf <= buf_data;
-              // buf_valid <= 1'b0;
-              if (buf_last) begin
-                state <= STATE_TX_LAST;
-              end
             end else begin
+              state <= state;
               ulpi_data_out_buf <= 8'h00;
             end
           end else begin
-            if (axis_tx_tvalid_i && !buf_valid) begin
-              // buf_data  <= axis_tx_tdata_i;
-              // buf_last  <= axis_tx_tlast_i;
-              // buf_valid <= 1'b1;
-            end
+            state <= state;
+            ulpi_data_out_buf <= ulpi_data_out_buf;
           end
+          snext <= 'bx;
+          reg_data <= 'bx;
         end
         STATE_TX_LAST: begin
           if (ulpi_nxt) begin
@@ -453,44 +434,52 @@ module usb_ulpi #(
         end
 
         STATE_CHIRP_START: begin
-          reg_data <= 8'b0_1_0_10_1_00;
-          ulpi_data_out_buf <= 8'h84;
           state <= STATE_WRITE_REGA;
           snext <= STATE_CHIRP_STARTK;
+          ulpi_data_out_buf <= 8'h84;
+          reg_data <= 8'b0_1_0_10_1_00;
         end
         STATE_CHIRP_STARTK: begin
           if (ulpi_nxt) begin
-            ulpi_data_out_buf <= 8'h00;
             state <= STATE_CHIRPK;
+            ulpi_data_out_buf <= 8'h00;
           end else begin
-            ulpi_data_out_buf <= 8'h40;
             state <= STATE_CHIRP_STARTK;
+            ulpi_data_out_buf <= 8'h40;
           end
           snext <= 'bx;
           reg_data <= 'bx;
         end
         STATE_CHIRPK: begin
           if (state_counter > CHIRP_K_TIME) begin
-            ulpi_data_out_buf <= 8'h00;
             state <= STATE_STP;
             snext <= STATE_CHIRPKJ;
+          end else begin
+            state <= state;
+            snext <= 'bx;
           end
+          ulpi_data_out_buf <= 8'h00;
           reg_data <= 'bx;
         end
         STATE_CHIRPKJ: begin
           if (chirp_kj_counter > 3 && state_counter > CHIRP_KJ_TIME) begin
-            reg_data <= 8'b0_1_0_00_0_00;
-            ulpi_data_out_buf <= 8'h84;
             state <= STATE_WRITE_REGA;
             snext <= STATE_IDLE;
+            ulpi_data_out_buf <= 8'h84;
+            reg_data <= 8'b0_1_0_00_0_00;
+          end else begin
+            state <= state;
+            snext <= 'bx;
+            ulpi_data_out_buf <= 8'h00;
+            reg_data <= 'bx;
           end
         end
 
         STATE_SWITCH_FSSTART: begin
-          reg_data <= 8'b0_1_0_00_1_01;
-          ulpi_data_out_buf <= 8'h84;
           state <= STATE_WRITE_REGA;
           snext <= STATE_SWITCH_FS;
+          reg_data <= 8'b0_1_0_00_1_01;
+          ulpi_data_out_buf <= 8'h84;
         end
         STATE_SWITCH_FS: begin
           if (state_counter > SWITCH_TIME) begin
@@ -499,9 +488,11 @@ module usb_ulpi #(
             end else begin
               state <= STATE_IDLE;
             end
+          end else begin
+            state <= state;
           end
           snext <= 'bx;
-          ulpi_data_out_buf <= 'bx;
+          ulpi_data_out_buf <= 8'h00;
           reg_data <= 'bx;
         end
       endcase
@@ -509,4 +500,4 @@ module usb_ulpi #(
   end
 
 
-endmodule
+endmodule // usb_ulpi
