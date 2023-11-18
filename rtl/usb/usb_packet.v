@@ -24,12 +24,12 @@ module usb_packet (
     output wire trn_start,
 
     /* DATA0/1/2 MDATA */
-    output wire [1:0] rx_trn_data_type,
-    output wire rx_trn_end,
-    output wire [7:0] rx_trn_data,
     output wire rx_trn_valid,
-    output wire [1:0] rx_trn_hsk_type,
+    output wire rx_trn_end,
+    output wire [1:0] rx_trn_data_type,
+    output wire [7:0] rx_trn_data,
     output wire rx_trn_hsk_received,
+    output wire [1:0] rx_trn_hsk_type,
 
     /* 00 - ACK, 10 - NAK, 11 - STALL, 01 - NYET */
     input wire [1:0] tx_trn_hsk_type,
@@ -85,29 +85,6 @@ module usb_packet (
     end
   endfunction
 
-/*
-  localparam  [2:0]
-	STATE_RX_IDLE = 3'd0,
-	STATE_RX_SOF = 3'd1,
-	STATE_RX_SOFCRC = 3'd2,
-	STATE_RX_TOKEN = 3'd3,
-	STATE_RX_TOKEN_CRC = 3'd4,
-	STATE_RX_DATA = 3'd5,
-	STATE_RX_DATA_CRC = 3'd6;
-
-  localparam [2:0]
-	STATE_TX_IDLE = 3'd0,
-	STATE_TX_HSK = 3'd1,
-	STATE_TX_HSK_WAIT = 3'd2,
-	STATE_TX_DATA_PID = 3'd3,
-	STATE_TX_DATA = 3'd4,
-	STATE_TX_DATA_CRC1 = 3'd5,
-	STATE_TX_DATA_CRC2 = 3'd6;
-
-  reg [2:0] rx_state;
-  reg [2:0] tx_state;
-*/
-
   localparam  [6:0]
 	STATE_RX_IDLE      = 7'h01,
 	STATE_RX_SOF       = 7'h02,
@@ -149,16 +126,15 @@ module usb_packet (
   reg [1:0] trn_type_out;
   reg [1:0] rx_trn_data_type_out;
   reg [1:0] rx_trn_hsk_type_out;
-  reg rx_vld0, rx_vld1;
-  wire rx_valid;
+
+  reg rx_vld0, rx_vld1, rx_valid_q, rx_trn_valid_q;
+  wire rx_valid_w, rx_trn_valid_w;
 
   reg [7:0] tx_tdata;
   reg tx_tvalid;
   reg tx_tlast;
 
 
-  assign rx_trn_data = rx_buf1;
-  assign rx_trn_valid = rx_state == STATE_RX_DATA && axis_rx_tvalid_i && rx_vld1 && rx_valid;
   assign rx_crc5 = crc5(token_data);
   assign rx_data_crc = {rx_buf2, rx_buf1};
   assign trn_address = token_data[6:0];
@@ -167,12 +143,8 @@ module usb_packet (
   assign start_of_frame = sof_flag;
   assign crc_error = crc_err_flag;
   assign trn_start = trn_start_out;
-  assign rx_trn_end = rx_valid & rx_trn_end_out;
-  assign rx_trn_hsk_received = rx_valid & rx_trn_hsk_received_out;
   assign trn_type = trn_type_out;
-  assign rx_trn_data_type = rx_trn_data_type_out;
-  assign rx_trn_hsk_type = rx_trn_hsk_type_out;
-  assign rx_valid = trn_address == device_address;
+
 
   assign tx_trn_data_ready = tx_state == STATE_TX_DATA & axis_tx_tready_i;
   assign tx_trn_hsk_sended = tx_state == STATE_TX_HSK_WAIT;
@@ -189,21 +161,42 @@ module usb_packet (
   assign axis_tx_tlast_o = tx_tlast;
 
 
-// -- Rx Data -- //
+  // -- Rx Data -- //
 
-always @(posedge clk) begin
-  if (rx_state == STATE_RX_IDLE) begin
-    {rx_vld1, rx_vld0} <= 2'b00;
-  end else if (axis_rx_tvalid_i) begin
-    {rx_vld1, rx_vld0} <= {rx_vld0, 1'b1};
+  assign rx_trn_valid = rx_trn_valid_q;
+  // assign rx_trn_valid = rx_trn_valid_w;
+  assign rx_trn_end = rx_trn_end_out;
+  assign rx_trn_data_type = rx_trn_data_type_out;
+  assign rx_trn_data = rx_buf1;
+  assign rx_trn_hsk_received = rx_trn_hsk_received_out;
+  assign rx_trn_hsk_type = rx_trn_hsk_type_out;
+
+  assign rx_trn_valid_w = rx_state == STATE_RX_DATA && axis_rx_tvalid_i && rx_valid_q;
+  assign rx_valid_w = trn_address == device_address;
+
+  always @(posedge clk) begin
+    if (rx_state == STATE_RX_DATA) begin
+      rx_trn_valid_q <= axis_rx_tvalid_i && !axis_rx_tlast_i && rx_vld0 && rx_valid_w;
+    end else begin
+      rx_trn_valid_q <= 1'b0;
+    end
   end
 
-  if (axis_rx_tvalid_i) begin
-    {rx_buf1, rx_buf2} <= {rx_buf2, axis_rx_tdata_i};
-  end else begin
-    {rx_buf1, rx_buf2} <= {rx_buf2, 8'bx};
+  always @(posedge clk) begin
+    if (rx_state == STATE_RX_IDLE) begin
+      {rx_vld1, rx_vld0} <= 2'b00;
+      rx_valid_q <= 1'b0;
+    end else if (axis_rx_tvalid_i) begin
+      {rx_vld1, rx_vld0} <= {rx_vld0, 1'b1};
+      rx_valid_q <= rx_vld0 && rx_valid_w;
+    end
+
+    if (axis_rx_tvalid_i) begin
+      {rx_buf1, rx_buf2} <= {rx_buf2, axis_rx_tdata_i};
+    end else begin
+      {rx_buf1, rx_buf2} <= {rx_buf2, 8'bx};
+    end
   end
-end
 
   /* Rx Data CRC Calculation */
   always @(posedge clk) begin
@@ -241,18 +234,19 @@ end
     endcase
   end
 
+  // Strobes that indicate the start and end of a (received) packet.
   always @(posedge clk) begin
     case (rx_state)
       STATE_RX_TOKEN_CRC: begin
-        trn_start_out <= device_address == token_data[6:0] && token_crc5 == rx_crc5;
+        trn_start_out  <= device_address == token_data[6:0] && token_crc5 == rx_crc5;
         rx_trn_end_out <= 1'b0;
       end
       STATE_RX_DATA_CRC: begin
-        trn_start_out <= 1'b0;
-        rx_trn_end_out <= 1'b1;
+        trn_start_out  <= 1'b0;
+        rx_trn_end_out <= rx_valid_w;
       end
       default: begin
-        trn_start_out <= 1'b0;
+        trn_start_out  <= 1'b0;
         rx_trn_end_out <= 1'b0;
       end
     endcase
@@ -260,13 +254,13 @@ end
 
   always @(posedge clk) begin
     case (rx_state)
-        STATE_RX_TOKEN, STATE_RX_SOF: begin
-          if (axis_rx_tvalid_i) begin
-            token_data[7:0] <= rx_vld0 ? token_data[7:0] : axis_rx_tdata_i;
-            token_data[10:8] <= rx_vld0 && !rx_vld1 ? axis_rx_tdata_i[2:0] : token_data[10:8];
-            token_crc5 <= rx_vld0 && !rx_vld1 ? axis_rx_tdata_i[7:3] : token_crc5;
-          end
+      STATE_RX_TOKEN, STATE_RX_SOF: begin
+        if (axis_rx_tvalid_i) begin
+          token_data[7:0] <= rx_vld0 ? token_data[7:0] : axis_rx_tdata_i;
+          token_data[10:8] <= rx_vld0 && !rx_vld1 ? axis_rx_tdata_i[2:0] : token_data[10:8];
+          token_crc5 <= rx_vld0 && !rx_vld1 ? axis_rx_tdata_i[7:3] : token_crc5;
         end
+      end
       default: begin
         token_data <= token_data;
         token_crc5 <= token_crc5;
@@ -278,7 +272,7 @@ end
     if (rx_state == STATE_RX_IDLE && axis_rx_tvalid_i &&
         rx_pid == ~axis_rx_tdata_i[7:4] && rx_pid[1:0] == 2'b10) begin
       rx_trn_hsk_type_out <= rx_pid[3:2];
-      rx_trn_hsk_received_out <= 1'b1;
+      rx_trn_hsk_received_out <= rx_valid_w;
     end else begin
       rx_trn_hsk_type_out <= rx_trn_hsk_type_out;
       rx_trn_hsk_received_out <= 1'b0;
@@ -461,4 +455,4 @@ end
   end
 
 
-endmodule
+endmodule // usb_packet
