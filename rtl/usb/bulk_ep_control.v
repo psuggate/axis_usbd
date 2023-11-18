@@ -319,45 +319,6 @@ module bulk_ep_control #(
     end
   end
 
-/*
-  // Read Reg //
-  always @(*) begin
-    if (state == STATE_REG_READ) begin
-      case (reg_addr)
-        REGADDR_TSR: reg_data_out <= reg_tsr[(byte_index+1)*8-1-:8];
-        REGADDR_TLR: reg_data_out <= reg_tlr[(byte_index+1)*8-1-:8];
-        REGADDR_RSR: reg_data_out <= reg_rsr[(byte_index+1)*8-1-:8];
-        default: reg_data_out <= 0;
-      endcase
-    end else begin
-      reg_data_out <= 0;
-    end
-  end
-
-  always @(*) begin
-    if (state == STATE_REG_WRITE) begin
-      if (ctl_xfer_data_out_valid == 1'b1) begin
-        tsr_flag_clr <= reg_addr == REGADDR_TSR;
-        rsr_flag_clr <= reg_addr == REGADDR_RSR;
-        case (reg_addr)
-          REGADDR_TSR: tsr_flag_clr <= 1'b1;
-          REGADDR_RSR: rsr_flag_clr <= 1'b1;
-          default: begin
-            tsr_flag_clr <= 1'b0;
-            rsr_flag_clr <= 1'b0;
-          end
-        endcase
-      end else begin
-        tsr_flag_clr <= 1'b0;
-        rsr_flag_clr <= 1'b0;
-      end
-    end else begin
-      tsr_flag_clr <= 1'b0;
-      rsr_flag_clr <= 1'b0;
-    end
-  end
-*/
-
   /* TSR & RSR Bits */
   always @(posedge clk) begin
     if (rst == 1'b1) begin
