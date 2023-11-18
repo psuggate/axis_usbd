@@ -1,44 +1,9 @@
 `timescale 1ns / 100ps
-//////////////////////////////////////////////////////////////////////////////////
-// Company:
-// Engineer: Dmitry Matyunin (https://github.com/mcjtag)
-// 
-// Create Date: 20.03.2021 14:55:14
-// Design Name: 
-// Module Name: usb_std_request
-// Project Name: axis_usbd
-// Target Devices:
-// Tool Versions:
-// Description: 
-// 
-// Dependencies: 
-// 
-// Revision:
-// Revision 0.01 - File Created
-// Additional Comments:
+//
 // Based on project 'https://github.com/ObKo/USBCore'
 // License: MIT
 //  Copyright (c) 2021 Dmitry Matyunin
-//  Permission is hereby granted, free of charge, to any person obtaining a copy
-//  of this software and associated documentation files (the "Software"), to deal
-//  in the Software without restriction, including without limitation the rights
-//  to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-//  copies of the Software, and to permit persons to whom the Software is
-//  furnished to do so, subject to the following conditions:
 //
-//  The above copyright notice and this permission notice shall be included in
-//  all copies or substantial portions of the Software.
-//
-//  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-//  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY
-//  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-//  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-//  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-//  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-//  THE SOFTWARE.
-// 
-//////////////////////////////////////////////////////////////////////////////////
-
 module usb_std_request #(
     parameter [15:0] VENDOR_ID = 16'hFACE,
     parameter [15:0] PRODUCT_ID = 16'h0BDE,
@@ -225,26 +190,29 @@ module usb_std_request #(
   wire is_dev_req;
   wire handle_req;
 
+
   assign device_address = device_address_int;
   assign current_configuration = current_configuration_int;
   assign configured = configured_int;
 
-  assign is_std_req = ((ctl_xfer_endpoint == 4'h0) && (ctl_xfer_type[6:5] == 2'b00)) ? 1'b1 : 1'b0;
-  assign is_dev_req = (ctl_xfer_type[4:0] == 5'b00000) ? 1'b1 : 1'b0;
+  assign is_std_req = ctl_xfer_endpoint == 4'h0 && ctl_xfer_type[6:5] == 2'b00;
+  assign is_dev_req = ctl_xfer_type[4:0] == 5'b00000;
   assign handle_req = is_std_req & is_dev_req;
   assign standart_request = is_std_req;
-  assign ctl_xfer_data_in_valid = (state == STATE_GET_DESC) ? 1'b1 : 1'b0;
+
+  assign ctl_xfer_data_in_valid = state == STATE_GET_DESC;
   assign ctl_xfer_data_in = USB_DESC[8*(mem_addr+1)-1-:8];
-  assign ctl_xfer_data_in_last = ((state == STATE_GET_DESC) && (mem_addr == max_mem_addr)) ? 1'b1 : 1'b0;
+  assign ctl_xfer_data_in_last = state == STATE_GET_DESC && mem_addr == max_mem_addr;
   assign ctl_xfer_done = 1'b1;
-  assign ctl_xfer_accept = (req_type == 3'b000) ? 1'b0 : 1'b1;
+  assign ctl_xfer_accept = req_type != 3'b000;
+
 
   always @(posedge clk) begin
-    if (rst == 1'b1) begin
+    if (rst) begin
 
     end else begin
       if (state == STATE_IDLE) begin
-        if (ctl_xfer == 1'b1) begin
+        if (ctl_xfer) begin
           if (req_type == 3'b011) begin
             mem_addr <= DESC_CONFIG_START;
             max_mem_addr <= DESC_STRING_START - 1;
@@ -269,7 +237,7 @@ module usb_std_request #(
         end else begin
           mem_addr <= 0;
         end
-      end else if ((state == STATE_GET_DESC) && (ctl_xfer_data_in_ready == 1'b1)) begin
+      end else if ((state == STATE_GET_DESC) && ctl_xfer_data_in_ready) begin
         if (mem_addr != max_mem_addr) begin
           mem_addr <= mem_addr + 1;
         end
@@ -278,14 +246,14 @@ module usb_std_request #(
   end
 
   always @(posedge clk) begin
-    if (rst == 1'b1) begin
+    if (rst) begin
       state <= STATE_IDLE;
       device_address_int <= 0;
       configured_int <= 1'b0;
     end else begin
       case (state)
         STATE_IDLE: begin
-          if (ctl_xfer == 1'b1) begin
+          if (ctl_xfer) begin
             if ((req_type == 3'b001) || (req_type == 3'b011) || (req_type == 3'b101)) begin
               state <= STATE_GET_DESC;
             end else if (req_type == 3'b010) begin
@@ -297,18 +265,18 @@ module usb_std_request #(
           end
         end
         STATE_SET_ADDR: begin
-          if (ctl_xfer == 1'b0) begin
+          if (!ctl_xfer) begin
             state <= STATE_IDLE;
             device_address_int <= ctl_xfer_value[6:0];
           end
         end
         STATE_GET_DESC: begin
-          if (ctl_xfer == 1'b0) begin
+          if (!ctl_xfer) begin
             state <= STATE_IDLE;
           end
         end
         STATE_SET_CONF: begin
-          if (ctl_xfer == 1'b0) begin
+          if (!ctl_xfer) begin
             configured_int <= 1'b1;
             state <= STATE_IDLE;
           end
@@ -318,15 +286,15 @@ module usb_std_request #(
   end
 
   always @(*) begin
-    if ((handle_req == 1'b1) && (ctl_xfer_request == 8'h06) && (ctl_xfer_value[15:8] == 8'h01)) begin
+    if (handle_req && (ctl_xfer_request == 8'h06) && (ctl_xfer_value[15:8] == 8'h01)) begin
       req_type <= 3'b001;
-    end else if ((handle_req == 1'b1) && (ctl_xfer_request == 8'h05)) begin
+    end else if (handle_req && (ctl_xfer_request == 8'h05)) begin
       req_type <= 3'b010;
-    end else if ((handle_req == 1'b1) && (ctl_xfer_request == 8'h06) && (ctl_xfer_value[15:8] == 8'h02)) begin
+    end else if (handle_req && (ctl_xfer_request == 8'h06) && (ctl_xfer_value[15:8] == 8'h02)) begin
       req_type <= 3'b011;
-    end else if ((handle_req == 1'b1) && (ctl_xfer_request == 8'h09)) begin
+    end else if (handle_req && (ctl_xfer_request == 8'h09)) begin
       req_type <= 3'b100;
-    end else if ((handle_req == 1'b1) && (ctl_xfer_request == 8'h06) && (ctl_xfer_value[15:8] == 8'h03)) begin
+    end else if (handle_req && (ctl_xfer_request == 8'h06) && (ctl_xfer_value[15:8] == 8'h03)) begin
       req_type <= 3'b101;
     end else begin
       req_type <= 3'b000;
