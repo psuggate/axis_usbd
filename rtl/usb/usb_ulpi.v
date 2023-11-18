@@ -42,7 +42,7 @@
 module usb_ulpi #(
     parameter integer HIGH_SPEED = 1
 ) (
-    input wire rst,
+    input wire rst_n,
 
     /* ULPI PHY signals */
     input wire ulpi_clk,
@@ -64,6 +64,8 @@ module usb_ulpi #(
     output wire axis_tx_tready_o,
     input wire axis_tx_tlast_i,
     input wire [7:0] axis_tx_tdata_i,
+
+   output ulpi_rx_overflow_o,
 
     output wire usb_vbus_valid_o,  /* VBUS has valid voltage */
     output wire usb_reset_o,  /* USB bus is in reset state */
@@ -134,7 +136,7 @@ module usb_ulpi #(
 
   // todo: should this be registered ??
   assign ulpi_stp = ((ulpi_dir == 1'b1) && (axis_rx_tready_i == 1'b0)) ? 1'b1 : ((state == STATE_STP) ? 1'b1 : 1'b0);
-  assign ulpi_reset = rst;
+  assign ulpi_reset = rst_n;
   assign ulpi_data_out = ulpi_data_out_buf;
 
   assign usb_vbus_valid_o = usb_vbus_valid_out;
@@ -142,10 +144,28 @@ module usb_ulpi #(
   assign usb_idle_o = (state == STATE_IDLE) ? 1'b1 : 1'b0;
   assign usb_suspend_o = (state == STATE_SUSPEND) ? 1'b1 : 1'b0;
 
+
+// -- Errors in this ULPI Core -- //
+
+reg rx_err;
+
+assign ulpi_rx_overflow_o = rx_err;
+
+always @(posedge ulpi_clk) begin
+  if (rst_n) begin
+    rx_err <= 1'b0;
+  end else if (rx_tvalid && !axis_rx_tready_i) begin
+    rx_err <= 1'b1;
+  end
+end
+
+
+// -- Capture Incoming USB Packets -- //
+
   always @(posedge ulpi_clk) begin
-    if ((dir_d == ulpi_dir) && (ulpi_dir == 1'b1) && (ulpi_nxt == 1'b1)) begin
+    if (dir_d && ulpi_dir && ulpi_nxt) begin
       packet_buf <= ulpi_data_in;
-      if (packet == 1'b0) begin
+      if (!packet) begin
         rx_tvalid <= 1'b0;
         packet <= 1'b1;
       end else begin
@@ -153,7 +173,8 @@ module usb_ulpi #(
         rx_tvalid <= 1'b1;
       end
       rx_tlast <= 1'b0;
-    end else if ((packet == 1'b1) && (dir_d == ulpi_dir) && ( ((ulpi_dir == 1'b1) && (ulpi_data_in[4] == 1'b0)) || (ulpi_dir == 1'b0) ) ) begin
+    end else if (packet && dir_d &&
+                 (ulpi_dir && ulpi_data_in[5:4] != 2'b01 || !ulpi_dir)) begin
       rx_tdata <= packet_buf;
       rx_tvalid <= 1'b1;
       rx_tlast <= 1'b1;
@@ -164,8 +185,12 @@ module usb_ulpi #(
     end
   end
 
+
+// -- Chirping -- //
+
   always @(posedge ulpi_clk) begin
-    if ((dir_d == ulpi_dir) && (ulpi_dir == 1'b1) && (ulpi_nxt == 1'b0) && (ulpi_data_in[1:0] != usb_line_state)) begin
+    // if ((dir_d == ulpi_dir) && (ulpi_dir == 1'b1) && (ulpi_nxt == 1'b0) && (ulpi_data_in[1:0] != usb_line_state)) begin
+    if (dir_d && ulpi_dir && !ulpi_nxt && (ulpi_data_in[1:0] != usb_line_state)) begin
       if (state == STATE_CHIRPKJ) begin
         if (ulpi_data_in[1:0] == 2'b01) begin
           chirp_kj_counter <= chirp_kj_counter + 1;
@@ -183,6 +208,9 @@ module usb_ulpi #(
       state_counter <= state_counter + 1;
     end
   end
+
+
+// -- ULPI FSM -- //
 
   always @(posedge ulpi_clk) begin
     dir_d <= ulpi_dir;

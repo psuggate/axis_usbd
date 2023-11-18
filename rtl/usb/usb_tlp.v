@@ -72,6 +72,7 @@ module usb_tlp #(
     },
     parameter integer HIGH_SPEED = 1
 ) (
+
     input wire [7:0] ulpi_data_in,
     output wire [7:0] ulpi_data_out,
     input wire ulpi_dir,
@@ -79,6 +80,8 @@ module usb_tlp #(
     output wire ulpi_stp,
     output wire ulpi_reset,
     input wire ulpi_clk60,
+
+output wire ulpi_rx_overflow_o,
 
     output wire usb_clk,
     output wire usb_reset,
@@ -221,7 +224,7 @@ module usb_tlp #(
   usb_ulpi #(
       .HIGH_SPEED(HIGH_SPEED)
   ) usb_ulpi_inst (
-      .rst(1'b1),
+      .rst_n(1'b1),
 
       .ulpi_data_in(ulpi_data_in),
       .ulpi_data_out(ulpi_data_out),
@@ -240,6 +243,8 @@ module usb_tlp #(
       .axis_tx_tready_o(axis_tx_tready),
       .axis_tx_tlast_i (axis_tx_tlast),
       .axis_tx_tdata_i (axis_tx_tdata),
+
+        .ulpi_rx_overflow_o(ulpi_rx_overflow_o),
 
       .usb_vbus_valid_o(usb_vbus_valid),
       .usb_reset_o(usb_reset_int),

@@ -55,6 +55,7 @@ module bulk_ep_control #(
     output wire tlp_blk_xfer_in_data_valid,
     input wire tlp_blk_xfer_in_data_ready,
     output wire tlp_blk_xfer_in_data_last,
+
     output wire ep_blk_in_xfer,
     input wire ep_blk_xfer_in_has_data,
     input wire [7:0] ep_blk_xfer_in_data,
@@ -67,6 +68,7 @@ module bulk_ep_control #(
     output wire tlp_blk_xfer_out_ready_read,
     input wire [7:0] tlp_blk_xfer_out_data,
     input wire tlp_blk_xfer_out_data_valid,
+
     output wire ep_blk_out_xfer,
     input wire ep_blk_xfer_out_ready_read,
     output wire [7:0] ep_blk_xfer_out_data,
@@ -205,6 +207,7 @@ module bulk_ep_control #(
             XFER_REJECT();
           end
         end
+
         STATE_CFG_GET: begin
           if (xfer_data_valid == 1'b0) begin
             xfer_data <= CONFIG[(byte_index+1)*8-1-:8];
@@ -225,6 +228,7 @@ module bulk_ep_control #(
             end
           end
         end
+
         STATE_REG_READ: begin
           if (xfer_data_valid == 1'b0) begin
             xfer_data_valid <= 1'b1;
@@ -243,6 +247,7 @@ module bulk_ep_control #(
             end
           end
         end
+
         STATE_REG_WRITE: begin
           if (ctl_xfer_data_out_valid == 1'b1) begin
             if (byte_index == 1) begin
@@ -252,14 +257,14 @@ module bulk_ep_control #(
             end
           end
         end
-        STATE_WAIT: begin
+
+        default: begin // STATE_WAIT
           XFER_FINISH();
           if (ctl_xfer == 1'b0) begin
             state <= STATE_IDLE;
+          end else begin
+            state <= STATE_WAIT;
           end
-        end
-        default: begin
-          state <= STATE_WAIT;
         end
       endcase
     end
@@ -267,16 +272,12 @@ module bulk_ep_control #(
 
   /* Read Reg */
   always @(*) begin
-    if (state == STATE_REG_READ) begin
-      case (reg_addr)
+    case (reg_addr)
         REGADDR_TSR: reg_data_out <= reg_tsr[(byte_index+1)*8-1-:8];
         REGADDR_TLR: reg_data_out <= reg_tlr[(byte_index+1)*8-1-:8];
         REGADDR_RSR: reg_data_out <= reg_rsr[(byte_index+1)*8-1-:8];
-        default: reg_data_out <= 0;
-      endcase
-    end else begin
-      reg_data_out <= 0;
-    end
+        default: reg_data_out <= 'bx;
+    endcase
   end
 
   /* Write Reg */
@@ -308,9 +309,36 @@ module bulk_ep_control #(
   end
 
   /* TSR & RSR Clear */
+  always @(posedge clk) begin
+    if (state == STATE_REG_WRITE) begin
+      tsr_flag_clr <= ctl_xfer_data_out_valid && reg_addr == REGADDR_TSR;
+      rsr_flag_clr <= ctl_xfer_data_out_valid && reg_addr == REGADDR_RSR;
+    end else begin
+      tsr_flag_clr <= 1'b0;
+      rsr_flag_clr <= 1'b0;
+    end
+  end
+
+/*
+  // Read Reg //
+  always @(*) begin
+    if (state == STATE_REG_READ) begin
+      case (reg_addr)
+        REGADDR_TSR: reg_data_out <= reg_tsr[(byte_index+1)*8-1-:8];
+        REGADDR_TLR: reg_data_out <= reg_tlr[(byte_index+1)*8-1-:8];
+        REGADDR_RSR: reg_data_out <= reg_rsr[(byte_index+1)*8-1-:8];
+        default: reg_data_out <= 0;
+      endcase
+    end else begin
+      reg_data_out <= 0;
+    end
+  end
+
   always @(*) begin
     if (state == STATE_REG_WRITE) begin
       if (ctl_xfer_data_out_valid == 1'b1) begin
+        tsr_flag_clr <= reg_addr == REGADDR_TSR;
+        rsr_flag_clr <= reg_addr == REGADDR_RSR;
         case (reg_addr)
           REGADDR_TSR: tsr_flag_clr <= 1'b1;
           REGADDR_RSR: rsr_flag_clr <= 1'b1;
@@ -328,6 +356,7 @@ module bulk_ep_control #(
       rsr_flag_clr <= 1'b0;
     end
   end
+*/
 
   /* TSR & RSR Bits */
   always @(posedge clk) begin

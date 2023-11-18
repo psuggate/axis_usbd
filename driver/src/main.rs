@@ -1,6 +1,6 @@
 use clap::Parser;
 use driver::axis_usb::*;
-use log::{error, info, LevelFilter};
+use log::{debug, error, info, LevelFilter};
 use rusb::Context;
 use simple_logger::SimpleLogger;
 
@@ -19,6 +19,9 @@ struct Args {
 
     #[arg(short, long, default_value = "32")]
     chunks: usize,
+
+    #[arg(short, long, default_value = "false")]
+    packet_mode: bool,
 
     /// Verbosity of generated output?
     #[arg(short, long, action = clap::ArgAction::Count)]
@@ -39,6 +42,13 @@ fn axis_usb(args: Args) -> Result<(), rusb::Error> {
         axis_usb.product(),
         axis_usb.serial_number()
     );
+
+    let tsr = axis_usb.read_register(0x0, None)?;
+    info!("TSR: 0x{:04x}", tsr);
+    let tlr = axis_usb.read_register(0x1, None)?;
+    info!("TLR: 0x{:04x}", tlr);
+    let rsr = axis_usb.read_register(0x2, None)?;
+    info!("RSR: 0x{:04x}", rsr);
 
     if args.read_first {
         // let bytes: Vec<u8> = axis_usb.try_read(None)?;
@@ -65,8 +75,25 @@ fn axis_usb(args: Args) -> Result<(), rusb::Error> {
     // let wrdat: Vec<u8> = wrdat[0..20].to_owned().repeat(32);
     let wrdat: Vec<u8> = wrdat[0..args.size].to_owned().repeat(args.chunks);
     // let wrdat: Vec<u8> = wrdat[0..20].to_owned().repeat(16);
+    if args.packet_mode {
+        if axis_usb.write_register(0x0, 0u16, None)? == 2 {
+            debug!("REG_WRITE TSR");
+        }
+        if axis_usb.write_register(0x1, wrdat.len() as u16, None)? == 2 {
+            debug!("REG_WRITE TLR = {}", wrdat.len());
+        }
+        let val: u16 = axis_usb.read_register(0x0, None)?;
+        debug!("REG_READ TSR = {}", val);
+    }
     let num = axis_usb.write(&wrdat)?;
+    if args.packet_mode {
+        let val: u16 = axis_usb.read_register(0x0, None)?;
+        debug!("REG_READ TSR = {}", val);
+        let val: u16 = axis_usb.read_register(0x1, None)?;
+        debug!("REG_READ TLR = {}", val);
+    }
     info!("WRITTEN (bytes = {}): {:?}", num, &wrdat);
+
     /*
         let num = axis_usb.write(&wrdat)?;
         info!("WRITTEN (bytes = {}): {:?}", num, &wrdat);
@@ -81,6 +108,15 @@ fn axis_usb(args: Args) -> Result<(), rusb::Error> {
     // info!("WRITTEN (bytes = {}): {:?}", num, &rdcmd);
 
     let bytes: Vec<u8> = axis_usb.try_read(None)?;
+    if args.packet_mode {
+        if axis_usb.write_register(0x2, 0u16, None)? == 2 {
+            debug!("REG_WRITE RSR = 0");
+        }
+    }
+    if args.packet_mode {
+        let rsr = axis_usb.read_register(0x2, None)?;
+        debug!("REG_READ RSR = {}", rsr);
+    }
     info!("RECEIVED (bytes = {}): {:?}", bytes.len(), &bytes);
 
     Ok(())

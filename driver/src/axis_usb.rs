@@ -79,6 +79,36 @@ impl AxisUSB {
         self.serial.clone()
     }
 
+    pub fn read_register(
+        &mut self,
+        register: u16,
+        timeout: Option<Duration>,
+    ) -> Result<u16, rusb::Error> {
+        let mut buf = [0u8; 2];
+        let tim = timeout.unwrap_or(DEFAULT_TIMEOUT);
+        let num = self
+            .handle
+            .read_control(0xC0, 0x01, register, 0, &mut buf, tim)?;
+        if num == 2 {
+            let res = ((buf[1] as u16) << 8) | buf[0] as u16;
+            Ok(res)
+        } else {
+            Err(rusb::Error::Io)
+        }
+    }
+
+    pub fn write_register(
+        &mut self,
+        register: u16,
+        value: u16,
+        timeout: Option<Duration>,
+    ) -> Result<usize, rusb::Error> {
+        let tim = timeout.unwrap_or(DEFAULT_TIMEOUT);
+        let buf = [(value & 0xff) as u8, (value >> 8) as u8];
+        self.handle
+            .write_control(0x40, 0x01, register, 0, &buf, tim)
+    }
+
     pub fn try_read(&mut self, timeout: Option<Duration>) -> Result<Vec<u8>, rusb::Error> {
         let timeout = timeout.unwrap_or(DEFAULT_TIMEOUT);
         let mut buf = [0; MAX_BUF_SIZE];
@@ -86,35 +116,13 @@ impl AxisUSB {
         let len = self
             .handle
             .read_bulk(self.endpoint.read_address(), &mut buf, timeout)?;
-        debug!("RESPONSE (bytes = {}): {:?}", len, &buf[0..len]);
+        debug!("RESPONSE (bytes = {})", len);
         Ok(Vec::from(&buf[0..len]))
     }
 
     pub fn write(&mut self, bytes: &[u8]) -> Result<usize, rusb::Error> {
         let len: u16 = bytes.len() as u16;
-        debug!("WRITE (bytes = {}): {:?}", len, bytes);
-        /*
-        // let lenbuf: [u8; 2] = [(len & 0xff) as u8, (len >> 8) as u8];
-        let lenbuf: [u8; 2] = [(len >> 8) as u8, (len & 0xff) as u8]; // big Endian
-        let res = self.handle.write_control(
-            0x0u8,
-            0x1u8,
-            // rusb::Recipient::Interface as u8, // 0x1u8,
-            TRANSFER_LENGTH_REGISTER,
-            0x0u16, // index
-            &lenbuf,
-            DEFAULT_TIMEOUT,
-        );
-        match res {
-            Ok(num) => {
-                debug!("WROTE {} bytes to TRANSFER_LENGTH_REGISTER", num);
-            }
-            Err(e) => {
-                error!("Failed to set TRANSFER_LENGTH_REGISTER: {:?}", e);
-                Err(e)?;
-            }
-        }
-        */
+        debug!("WRITE (bytes = {})", len);
         self.handle
             .write_bulk(self.endpoint.write_address(), bytes, DEFAULT_TIMEOUT)
     }
