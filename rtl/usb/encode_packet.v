@@ -62,9 +62,6 @@ module encode_packet (
   // -- Input/Output Assignments -- //
 
   assign hsk_done_o  = state == ST_HSK_WAIT;
-  assign tx_tvalid_o = tvld;
-  assign tx_tlast_o  = tlst;
-  assign tx_tdata_o  = tdat;
 
 
   // -- Internal Signals -- //
@@ -174,10 +171,11 @@ module encode_packet (
   // `define __upstream_flow_control_works
 `ifdef __upstream_flow_control_works
   /**
- * TODO:
- *  - I think that there are upstream data-path problems ??
- *  - Specifically, I don't think the upstream flow-control works correctly !?
- */
+   * TODO:
+   *  - I think that there are upstream data-path problems ??
+   *  - Specifically, I don't think the upstream flow-control works correctly !?
+   */
+  reg tx_cycle_q;
 
   // assign trn_tready_o = xrdy;
   assign tx_ready = !tvld || tvld && tx_tready_i;
@@ -185,7 +183,9 @@ module encode_packet (
   // assign tx_ready = tx_tready_i;
   // assign tx_ready = xrdy;
 
-  reg tx_cycle_q;
+  assign tx_tvalid_o = tvld;
+  assign tx_tlast_o  = tlst;
+  assign tx_tdata_o  = tdat;
 
   always @(posedge clock) begin
     case (state)
@@ -276,8 +276,12 @@ module encode_packet (
 
 `else
 
-  assign trn_tready_o = state == ST_DATA & tx_tready_i;
-  assign tx_ready = tx_tready_i;
+  wire trdy_w;
+
+  // assign trn_tready_o = state == ST_DATA & tx_tready_i;
+  // assign tx_ready = tx_tready_i;
+  assign trn_tready_o = state == ST_DATA & trdy_w;
+  assign tx_ready = trdy_w;
 
   // todo: clean-up this disaster site !?
   always @(*) begin
@@ -307,6 +311,27 @@ module encode_packet (
       tlst = 1'b0;
     end
   end
+
+  // todo: instantiating this ('BYPASS(1)') causes the same types of failure as
+  //   the alternative implementation in the 'ifdef' block above -- this skid-
+  //   register works, so does this mean that there is a problem upstream !?
+  axis_skid #(
+      .WIDTH (8),
+      .BYPASS(1)
+  ) axis_skid_inst (
+      .clock(clock),
+      .reset(reset),
+
+      .s_tvalid(tvld),
+      .s_tready(trdy_w),
+      .s_tlast (tlst),
+      .s_tdata (tdat),
+
+      .m_tvalid(tx_tvalid_o),
+      .m_tready(tx_tready_i),
+      .m_tlast (tx_tlast_o),
+      .m_tdata (tx_tdata_o)
+  );
 
 `endif
 
