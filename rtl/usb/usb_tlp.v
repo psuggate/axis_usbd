@@ -81,11 +81,11 @@ module usb_tlp #(
     output wire blk_out_xfer,
 
     // Has complete packet
-    input wire blk_xfer_in_has_data,
-    input wire [7:0] blk_xfer_in_data,
-    input wire blk_xfer_in_data_valid,
-    output wire blk_xfer_in_data_ready,
-    input wire blk_xfer_in_data_last,
+    input wire bid_has_data_i,
+    input wire bid_tvalid_i,
+    output wire bid_tready_o,
+    input wire bid_tlast_i,
+    input wire [7:0] bid_tdata_i,
 
     // Can accept full packet
     input wire blk_xfer_out_ready_read,
@@ -115,11 +115,11 @@ module usb_tlp #(
   wire rx_trn_valid;
 
   wire [1:0] rx_trn_hsk_type;
-  wire rx_trn_hsk_received;
+  wire rx_trn_hsk_recv;
 
   wire [1:0] tx_trn_hsk_type;
   wire tx_trn_send_hsk;
-  wire tx_trn_hsk_sended;
+  wire tx_trn_hsk_sent;
 
   wire [1:0] tx_trn_data_type;
   wire tx_trn_data_start;
@@ -234,24 +234,25 @@ module usb_tlp #(
       .axis_tx_tlast_o (axis_tx_tlast),
       .axis_tx_tdata_o (axis_tx_tdata),
 
-      .trn_type(trn_type),
-      .trn_address(trn_address),
-      .trn_endpoint(trn_endpoint),
-      .trn_start(trn_start),
+      .trn_start_o(trn_start),
+      .trn_type_o(trn_type),
+      .trn_address_o(trn_address),
+      .trn_endpoint_o(trn_endpoint),
+      .usb_address_i(device_address),
+
       .start_of_frame(usb_sof),
       .crc_error(usb_crc_error_int),
-      .device_address(device_address),
 
-      .rx_trn_data_type(rx_trn_data_type),
-      .rx_trn_end(rx_trn_end),
-      .rx_trn_data(rx_trn_data),
-      .rx_trn_valid(rx_trn_valid),
+      .rx_trn_valid_o(rx_trn_valid),
+      .rx_trn_end_o(rx_trn_end),
+      .rx_trn_type_o(rx_trn_data_type),
+      .rx_trn_data_o(rx_trn_data),
       .rx_trn_hsk_type(rx_trn_hsk_type),
-      .rx_trn_hsk_received(rx_trn_hsk_received),
+      .rx_trn_hsk_recv(rx_trn_hsk_recv),
 
       .tx_trn_hsk_type(tx_trn_hsk_type),
       .tx_trn_send_hsk(tx_trn_send_hsk),
-      .tx_trn_hsk_sended(tx_trn_hsk_sended),
+      .tx_trn_hsk_sent(tx_trn_hsk_sent),
       .tx_trn_data_type(tx_trn_data_type),
       .tx_trn_data_start(tx_trn_data_start),
       .tx_trn_data(tx_trn_data),
@@ -279,11 +280,11 @@ module usb_tlp #(
       .rx_trn_data(rx_trn_data),
       .rx_trn_valid(rx_trn_valid),
       .rx_trn_hsk_type(rx_trn_hsk_type),
-      .rx_trn_hsk_received(rx_trn_hsk_received),
+      .rx_trn_hsk_recv(rx_trn_hsk_recv),
 
       .tx_trn_hsk_type(tx_trn_hsk_type),
       .tx_trn_send_hsk(tx_trn_send_hsk),
-      .tx_trn_hsk_sended(tx_trn_hsk_sended),
+      .tx_trn_hsk_sent(tx_trn_hsk_sent),
       .tx_trn_data_type(tx_trn_data_type),
       .tx_trn_data_start(tx_trn_data_start),
       .tx_trn_data(tx_trn_data),
@@ -293,15 +294,16 @@ module usb_tlp #(
 
       .crc_error(usb_crc_error_int),
 
-      .ctl_xfer_endpoint(ctl_xfer_endpoint_int),
-      .ctl_xfer_type(ctl_xfer_type_int),
-      .ctl_xfer_request(ctl_xfer_request_int),
-      .ctl_xfer_value(ctl_xfer_value_int),
-      .ctl_xfer_index(ctl_xfer_index_int),
-      .ctl_xfer_length(ctl_xfer_length_int),
-      .ctl_xfer_accept(ctl_xfer_accept_int),
-      .ctl_xfer(ctl_xfer_int),
-      .ctl_xfer_done(ctl_xfer_done_int),
+      .ctl_xfer_o(ctl_xfer_int),
+      .ctl_xfer_endpoint_o(ctl_xfer_endpoint_int),
+      .ctl_xfer_type_o(ctl_xfer_type_int),
+      .ctl_xfer_request_o(ctl_xfer_request_int),
+      .ctl_xfer_value_o(ctl_xfer_value_int),
+      .ctl_xfer_index_o(ctl_xfer_index_int),
+      .ctl_xfer_length_o(ctl_xfer_length_int),
+      .ctl_xfer_accept_i(ctl_xfer_accept_int),
+      .ctl_xfer_done_i(ctl_xfer_done_int),
+
       .ctl_xfer_data_out(ctl_xfer_data_out),
       .ctl_xfer_data_out_valid(ctl_xfer_data_out_valid_int),
       .ctl_xfer_data_in(ctl_xfer_data_in_int),
@@ -309,14 +311,17 @@ module usb_tlp #(
       .ctl_xfer_data_in_last(ctl_xfer_data_in_last_int),
       .ctl_xfer_data_in_ready(ctl_xfer_data_in_ready_int),
 
-      .blk_xfer_endpoint(blk_xfer_endpoint),
-      .blk_in_xfer(blk_in_xfer),
-      .blk_out_xfer(blk_out_xfer),
-      .blk_xfer_in_has_data(blk_xfer_in_has_data),
-      .blk_xfer_in_data(blk_xfer_in_data),
-      .blk_xfer_in_data_valid(blk_xfer_in_data_valid),
-      .blk_xfer_in_data_ready(blk_xfer_in_data_ready),
-      .blk_xfer_in_data_last(blk_xfer_in_data_last),
+      .blk_xfer_endpoint_o(blk_xfer_endpoint), // 4-bit EP address
+      .blk_in_xfer_o(blk_in_xfer),
+      .blk_out_xfer_o(blk_out_xfer),
+
+      // From on-chip data source
+      .bid_has_data_i(bid_has_data_i),
+      .bid_tvalid_i(bid_tvalid_i),
+      .bid_tready_o(bid_tready_o),
+      .bid_tlast_i(bid_tlast_i),
+      .bid_tdata_i(bid_tdata_i),
+
       .blk_xfer_out_ready_read(blk_xfer_out_ready_read),
       .blk_xfer_out_data(blk_xfer_out_data),
       .blk_xfer_out_data_valid(blk_xfer_out_data_valid)
