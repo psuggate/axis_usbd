@@ -220,47 +220,26 @@ module usb_tlp #(
 
   // -- Encode/decode USB packets, over the AXI4 streams -- //
 
-  usb_packet usb_packet_inst (
-      .rst(usb_reset_int),
-      .clk(ulpi_clk60),
+  encode_packet tx_usb_packet_inst (
+      .reset(usb_reset_int),
+      .clock(ulpi_clk60),
 
-      .axis_rx_tvalid_i(1'b0),
-      .axis_rx_tready_o(),
-      .axis_rx_tlast_i (1'b0),
-      .axis_rx_tdata_i ('bx),
+      .tx_tvalid_o(axis_tx_tvalid),
+      .tx_tready_i(axis_tx_tready),
+      .tx_tlast_o (axis_tx_tlast),
+      .tx_tdata_o (axis_tx_tdata),
 
-      .axis_tx_tvalid_o(axis_tx_tvalid),
-      .axis_tx_tready_i(axis_tx_tready),
-      .axis_tx_tlast_o (axis_tx_tlast),
-      .axis_tx_tdata_o (axis_tx_tdata),
+      .hsk_send_i(tx_trn_send_hsk),
+      .hsk_done_o(tx_trn_hsk_sent),
+      .hsk_type_i(tx_trn_hsk_type),
 
-      .trn_start_o(),
-      .trn_type_o(),
-      .trn_address_o(),
-      .trn_endpoint_o(),
-      .usb_address_i(device_address),
-
-      .start_of_frame(),
-      .crc_error(),
-
-      .rx_trn_valid_o(),
-      .rx_trn_end_o(),
-      .rx_trn_type_o(),
-      .rx_trn_data_o(),
-      .rx_trn_hsk_type(),
-      .rx_trn_hsk_recv(),
-
-      .tx_trn_hsk_type(tx_trn_hsk_type),
-      .tx_trn_send_hsk(tx_trn_send_hsk),
-      .tx_trn_hsk_sent(tx_trn_hsk_sent),
-      .tx_trn_data_type(tx_trn_data_type),
-      .tx_trn_data_start(tx_trn_data_start),
-      .tx_trn_data(tx_trn_data),
-      .tx_trn_data_valid(tx_trn_data_valid),
-      .tx_trn_data_ready(tx_trn_data_ready),
-      .tx_trn_data_last(tx_trn_data_last)
+      .trn_start_i(tx_trn_data_start),
+      .trn_type_i(tx_trn_data_type),
+      .trn_tvalid_i(tx_trn_data_valid),
+      .trn_tready_o(tx_trn_data_ready),
+      .trn_tlast_i(tx_trn_data_last),
+      .trn_tdata_i(tx_trn_data)
   );
-
 
   decode_packet rx_usb_packet_inst (
       .reset(usb_reset_int),
