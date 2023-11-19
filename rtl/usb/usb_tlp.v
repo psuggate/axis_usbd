@@ -224,31 +224,31 @@ module usb_tlp #(
       .rst(usb_reset_int),
       .clk(ulpi_clk60),
 
-      .axis_rx_tvalid_i(axis_rx_tvalid),
-      .axis_rx_tready_o(axis_rx_tready),
-      .axis_rx_tlast_i (axis_rx_tlast),
-      .axis_rx_tdata_i (axis_rx_tdata),
+      .axis_rx_tvalid_i(1'b0),
+      .axis_rx_tready_o(),
+      .axis_rx_tlast_i (1'b0),
+      .axis_rx_tdata_i ('bx),
 
       .axis_tx_tvalid_o(axis_tx_tvalid),
       .axis_tx_tready_i(axis_tx_tready),
       .axis_tx_tlast_o (axis_tx_tlast),
       .axis_tx_tdata_o (axis_tx_tdata),
 
-      .trn_start_o(trn_start),
-      .trn_type_o(trn_type),
-      .trn_address_o(trn_address),
-      .trn_endpoint_o(trn_endpoint),
+      .trn_start_o(),
+      .trn_type_o(),
+      .trn_address_o(),
+      .trn_endpoint_o(),
       .usb_address_i(device_address),
 
-      .start_of_frame(usb_sof),
-      .crc_error(usb_crc_error_int),
+      .start_of_frame(),
+      .crc_error(),
 
-      .rx_trn_valid_o(rx_trn_valid),
-      .rx_trn_end_o(rx_trn_end),
-      .rx_trn_type_o(rx_trn_data_type),
-      .rx_trn_data_o(rx_trn_data),
-      .rx_trn_hsk_type(rx_trn_hsk_type),
-      .rx_trn_hsk_recv(rx_trn_hsk_recv),
+      .rx_trn_valid_o(),
+      .rx_trn_end_o(),
+      .rx_trn_type_o(),
+      .rx_trn_data_o(),
+      .rx_trn_hsk_type(),
+      .rx_trn_hsk_recv(),
 
       .tx_trn_hsk_type(tx_trn_hsk_type),
       .tx_trn_send_hsk(tx_trn_send_hsk),
@@ -259,6 +259,34 @@ module usb_tlp #(
       .tx_trn_data_valid(tx_trn_data_valid),
       .tx_trn_data_ready(tx_trn_data_ready),
       .tx_trn_data_last(tx_trn_data_last)
+  );
+
+
+  decode_packet rx_usb_packet_inst (
+      .reset(usb_reset_int),
+      .clock(ulpi_clk60),
+
+      .rx_tvalid_i(axis_rx_tvalid),
+      .rx_tready_o(axis_rx_tready),
+      .rx_tlast_i (axis_rx_tlast),
+      .rx_tdata_i (axis_rx_tdata),
+
+      .trn_start_o(trn_start),
+      .trn_type_o(trn_type),
+      .trn_address_o(trn_address),
+      .trn_endpoint_o(trn_endpoint),
+      .usb_address_i(device_address),
+
+      .usb_sof_o(usb_sof),
+      .crc_err_o(usb_crc_error_int),
+
+      .rx_trn_valid_o(rx_trn_valid),
+      .rx_trn_end_o(rx_trn_end),
+      .rx_trn_type_o(rx_trn_data_type),
+      .rx_trn_data_o(rx_trn_data),
+
+      .trn_hsk_type_o(rx_trn_hsk_type),
+      .trn_hsk_recv_o(rx_trn_hsk_recv)
   );
 
 
