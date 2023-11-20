@@ -25,6 +25,8 @@ module encode_packet (
     trn_tdata_i
 );
 
+  parameter TOKEN = 0;
+
   input reset;
   input clock;
 
@@ -87,7 +89,7 @@ module encode_packet (
 
 
   assign hsk_done_o   = hend_q;
-  assign tok_done_o   = kend_q;
+  assign tok_done_o   = TOKEN ? kend_q : 1'b0;
 
   assign tx_tvalid_o  = tvalid;
   assign tx_tlast_o   = tlast;
@@ -128,7 +130,7 @@ module encode_packet (
   end
 
   always @(posedge clock) begin
-    if (!tok_send_i) begin
+    if (!TOKEN || !tok_send_i) begin
       kend_q <= 1'b0;
     end else if (xtok_q && tok_send_i && tlast && tx_tready_i) begin
       kend_q <= 1'b1;
@@ -165,16 +167,22 @@ module encode_packet (
 
   wire [2:0] state = {xdat_q, xtok_q, xhsk_q};
 
+  localparam [2:0] ST_IDLE = 3'b000;
+  localparam [2:0] ST_XHSK = 3'b001;
+  localparam [2:0] ST_XTOK = 3'b010;
+  localparam [2:0] ST_DATA = 3'b100;
+
   always @(posedge clock) begin
     if (reset) begin
-      {xdat_q, xtok_q, xhsk_q, zero_q, xcrc_q} <= 5'b00000;
+      {xdat_q, xtok_q, xhsk_q} <= ST_IDLE;
+      {zero_q, xcrc_q} <= 2'b00;
 
       tvalid <= 1'b0;
       tlast <= 1'b0;
       tdata <= 8'bx;
     end else begin
       case (state)
-        3'b001: begin
+        ST_XHSK: begin
           // Handshake packet
           if (!hsk_send_i) begin
             xhsk_q <= 1'b0;
@@ -189,16 +197,16 @@ module encode_packet (
           xcrc_q <= 1'bx;
         end
 
-        3'b010: begin
+        ST_XTOK: begin
           // Token packet
           if (!tok_send_i) begin
             xtok_q <= 1'b0;
           end
 
           if (tx_tready_i) begin
-            if (zero_q) begin
-              zero_q <= 1'b0;
+            zero_q <= 1'b0;
 
+            if (zero_q) begin
               tvalid <= 1'b1;
               tlast  <= 1'b0;
               tdata  <= tok_data_i[7:0];
@@ -211,67 +219,81 @@ module encode_packet (
               tlast  <= 1'b1;
               tdata  <= tok_data_i[15:8];
             end
+          end else begin
+            zero_q <= zero_q;
           end
+
+          xcrc_q <= 1'bx;
         end
 
-        3'b100: begin
+        ST_DATA: begin
           if (xcrc_q && tx_tready_i) begin
             // Sending 2nd byte of CRC16
             if (tlast) begin
-              {xdat_q, xcrc_q} <= 2'b00;
+              {xdat_q, zero_q, xcrc_q} <= 3'b000;
 
               tvalid <= 1'b0;
               tlast <= 1'b0;
               tdata <= 8'bx;
             end else begin
+              {xdat_q, zero_q, xcrc_q} <= 3'b101;
+
               tvalid <= 1'b1;
-              tlast  <= 1'b1;
-              tdata  <= crc16_nw[15:8];
+              tlast <= 1'b1;
+              tdata <= crc16_nw[15:8];
             end
           end else if (tx_tready_i && (zero_q || !trn_tvalid_i)) begin
             // Sending 1st byte of CRC16
-            {zero_q, xcrc_q} <= 2'b01;
+            {xdat_q, zero_q, xcrc_q} <= 3'b101;
 
             tvalid <= 1'b1;
             tlast <= 1'b0;
             tdata <= crc16_nw[7:0];
           end else begin
             // Transfer data from source to destination
+            xdat_q <= 1'b1;
             tvalid <= tvalid_next;
 
             if (src_to_dst(uready, tvalid, tx_tready_i)) begin
-              tdata  <= trn_tdata_i;
               zero_q <= trn_tlast_i;
+              xcrc_q <= 1'b0;
+              tdata  <= trn_tdata_i;
             end else if (tmp_to_dst(xvalid, tx_tready_i)) begin
-              tdata  <= xdata;
               zero_q <= xlast;
+              xcrc_q <= 1'b0;
+              tdata  <= xdata;
+            end else begin
+              zero_q <= zero_q;
+              xcrc_q <= xcrc_q;
+              tdata  <= tdata;
             end
           end
         end
 
         default: begin
           if (hsk_send_i) begin
-            {xdat_q, xtok_q, xhsk_q} <= 3'b001;
+            {xdat_q, xtok_q, xhsk_q} <= ST_XHSK;
+            {zero_q, xcrc_q} <= 2'b00;
 
             tvalid <= 1'b1;
             tlast <= 1'b1;
             tdata <= {~{hsk_type_i, 2'b10}, hsk_type_i, 2'b10};
-          end else if (tok_send_i) begin
-            {xdat_q, xtok_q, xhsk_q} <= 5'b010;
-            zero_q <= 1'b1;
+          end else if (TOKEN && tok_send_i) begin
+            {xdat_q, xtok_q, xhsk_q} <= ST_XTOK;
+            {zero_q, xcrc_q} <= 2'b10;
 
             tvalid <= 1'b1;
             tlast <= 1'b0;
             tdata <= {~{tok_type_i, 2'b01}, {tok_type_i, 2'b01}};
           end else if (trn_start_i) begin
-            {xdat_q, xtok_q, xhsk_q} <= 3'b100;
-            zero_q <= trn_tlast_i;  // PID-only packet ??
+            {xdat_q, xtok_q, xhsk_q} <= ST_DATA;
+            {zero_q, xcrc_q} <= {trn_tlast_i, 1'b0};  // PID-only packet ??
 
             tvalid <= 1'b1;
             tlast <= 1'b0;
             tdata <= {~{trn_type_i, 2'b11}, {trn_type_i, 2'b11}};
           end else begin
-            {xdat_q, xtok_q, xhsk_q} <= 3'b000;
+            {xdat_q, xtok_q, xhsk_q} <= ST_IDLE;
             {zero_q, xcrc_q} <= 2'b00;
 
             tvalid <= 1'b0;

@@ -36,8 +36,8 @@ module usb_xfer #(
     input wire crc_error,
 
     /* Ctl */
-    output wire ctl_xfer_o, /* '1' when processing control transfer */
-    input wire ctl_xfer_done_i, /* '1' when control request completed */
+    output wire ctl_xfer_o,  /* '1' when processing control transfer */
+    input wire ctl_xfer_done_i,  /* '1' when control request completed */
     output wire [3:0] ctl_xfer_endpoint_o,
     output wire [7:0] ctl_xfer_type_o,
     output wire [7:0] ctl_xfer_request_o,
@@ -45,13 +45,14 @@ module usb_xfer #(
     output wire [15:0] ctl_xfer_index_o,
     output wire [15:0] ctl_xfer_length_o,
     input wire ctl_xfer_accept_i,
-    
+
     output wire [7:0] ctl_xfer_data_out,
     output wire ctl_xfer_data_out_valid,
-    input wire [7:0] ctl_xfer_data_in,
-    input wire ctl_xfer_data_in_valid,
-    input wire ctl_xfer_data_in_last,
-    output wire ctl_xfer_data_in_ready,
+
+    input wire ctl_tvalid_i,
+    output wire ctl_tready_o,
+    input wire ctl_tlast_i,
+    input wire [7:0] ctl_tdata_i,
 
     /* Bulk EP IN/OUT */
     output wire [3:0] blk_xfer_endpoint_o,
@@ -133,9 +134,11 @@ module usb_xfer #(
   assign blk_in_xfer_o = blk_in_xfer_int;
   assign blk_out_xfer_o = blk_out_xfer_int;
 
-  assign ctl_xfer_data_in_ready = state == STATE_CONTROL_DATAIN && tx_trn_data_ready;
+  assign ctl_tready_o = state == STATE_CONTROL_DATAIN && tx_trn_data_ready;
+
   assign blk_xfer_out_data = rx_trn_data;
   assign blk_xfer_out_data_valid = state == STATE_BULK_OUT && rx_trn_valid;
+
   assign ctl_xfer_data_out = rx_trn_data;
   assign ctl_xfer_data_out_valid = rx_trn_valid;
 
@@ -148,7 +151,7 @@ module usb_xfer #(
   assign tx_trn_data_type = {data_types[current_endpoint], 1'b0};
   assign tx_trn_data_valid = tx_trn_data_valid_int;
   assign tx_trn_data_last = tx_trn_data_last_int;
-  assign tx_trn_data = state == STATE_CONTROL_DATAIN ? ctl_xfer_data_in : bid_tdata_i;
+  assign tx_trn_data = state == STATE_CONTROL_DATAIN ? ctl_tdata_i : bid_tdata_i;
 
 
   /* Rx Counter */
@@ -304,12 +307,11 @@ module usb_xfer #(
         end
 
         STATE_CONTROL_DATAIN: begin
-          if (ctl_xfer_data_in_valid && tx_trn_data_ready) begin
-            if (tx_counter[5:0] == 63 || tx_counter == ctl_xfer_length_int - 1 ||
-                ctl_xfer_data_in_last) begin
+          if (ctl_tvalid_i && tx_trn_data_ready) begin
+            if (tx_counter[5:0] == 63 || tx_counter == ctl_xfer_length_int - 1 || ctl_tlast_i) begin
               tx_trn_data_start_int <= 1'b0;
               state <= STATE_CONTROL_DATAIN_ACK;
-              if (ctl_xfer_data_in_last) begin
+              if (ctl_tlast_i) begin
                 ctl_xfer_eop <= 1'b1;
               end
             end
@@ -446,7 +448,7 @@ module usb_xfer #(
     endcase
 
     case (state)
-      STATE_CONTROL_DATAIN: tx_trn_data_valid_int <= ctl_xfer_data_in_valid;
+      STATE_CONTROL_DATAIN: tx_trn_data_valid_int <= ctl_tvalid_i;
       STATE_BULK_IN: tx_trn_data_valid_int <= bid_tvalid_i;
       default: tx_trn_data_valid_int <= 1'b0;
     endcase
@@ -460,7 +462,7 @@ module usb_xfer #(
     end else if (state == STATE_CONTROL_DATAIN_Z) begin
       tx_trn_data_last_int <= 1'b1;
     end else if (state == STATE_CONTROL_DATAIN) begin
-      tx_trn_data_last_int <= ctl_xfer_data_in_last;
+      tx_trn_data_last_int <= ctl_tlast_i;
     end else begin
       tx_trn_data_last_int <= 1'b0;
     end

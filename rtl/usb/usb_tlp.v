@@ -48,7 +48,7 @@ module usb_tlp #(
 
     output wire ulpi_rx_overflow_o,
 
-    output wire usb_clk,
+    output wire usb_clock,
     output wire usb_reset,
     output wire usb_idle,
     output wire usb_suspend,
@@ -63,17 +63,17 @@ module usb_tlp #(
     output wire [15:0] ctl_xfer_value,
     output wire [15:0] ctl_xfer_index,
     output wire [15:0] ctl_xfer_length,
-    input wire ctl_xfer_accept,
-    output wire ctl_xfer,
+    input wire ctl_xfer_accept_i,
+    output wire ctl_xfer_request_o,
     input wire ctl_xfer_done,
 
     output wire [7:0] ctl_xfer_data_out,
     output wire ctl_xfer_data_out_valid,
 
-    input wire [7:0] ctl_xfer_data_in,
-    input wire ctl_xfer_data_in_valid,
-    input wire ctl_xfer_data_in_last,
-    output wire ctl_xfer_data_in_ready,
+    input wire [7:0] ctl_tdata_i,
+    input wire ctl_tvalid_i,
+    input wire ctl_tlast_i,
+    output wire ctl_tready_o,
 
     // Bulk transfer signals
     output wire [3:0] blk_xfer_endpoint,
@@ -141,7 +141,6 @@ module usb_tlp #(
 
   wire ctl_xfer_accept_std;
   wire ctl_xfer_std;
-  wire ctl_xfer_done_std;
 
   wire ctl_xfer_data_out_valid_int;
 
@@ -157,31 +156,42 @@ module usb_tlp #(
   wire [7:0] current_configuration;
   wire usb_reset_int;
   wire usb_crc_error_int;
-  wire cfg_request;
+  reg cfg_request_q;
+  wire cfg_request, cfg_request_w;
   wire [6:0] device_address;
 
 
-  assign usb_clk = ulpi_clk60;
-  assign usb_reset = usb_reset_int;
+  assign usb_clock                  = ulpi_clk60;
+  assign usb_reset                  = usb_reset_int;
 
-  assign usb_crc_error = usb_crc_error_int;
+  assign usb_crc_error              = usb_crc_error_int;
 
-  assign ctl_xfer_endpoint = ctl_xfer_endpoint_int;
-  assign ctl_xfer_type = ctl_xfer_type_int;
-  assign ctl_xfer_request = ctl_xfer_request_int;
-  assign ctl_xfer_value = ctl_xfer_value_int;
-  assign ctl_xfer_index = ctl_xfer_index_int;
-  assign ctl_xfer_length = ctl_xfer_length_int;
+  assign ctl_xfer_endpoint          = ctl_xfer_endpoint_int;
+  assign ctl_xfer_type              = ctl_xfer_type_int;
+  assign ctl_xfer_request           = ctl_xfer_request_int;
+  assign ctl_xfer_value             = ctl_xfer_value_int;
+  assign ctl_xfer_index             = ctl_xfer_index_int;
+  assign ctl_xfer_length            = ctl_xfer_length_int;
 
-  assign ctl_xfer                   = cfg_request ? 1'b0 : ctl_xfer_int;
+  assign ctl_xfer_request_o         = cfg_request ? 1'b0 : ctl_xfer_int;
   assign ctl_xfer_data_out_valid    = cfg_request ? 1'b0 : ctl_xfer_data_out_valid_int;
-  assign ctl_xfer_data_in_ready     = cfg_request ? 1'b0 : ctl_xfer_data_in_ready_int;
 
-  assign ctl_xfer_accept_int        = cfg_request ? ctl_xfer_accept_std : ctl_xfer_accept;
-  assign ctl_xfer_done_int          = cfg_request ? ctl_xfer_done_std : ctl_xfer_done;
-  assign ctl_xfer_data_in_valid_int = cfg_request ? ctl_xfer_data_in_valid_std : ctl_xfer_data_in_valid;
-  assign ctl_xfer_data_in_last_int  = cfg_request ? ctl_xfer_data_in_last_std : ctl_xfer_data_in_last;
-  assign ctl_xfer_data_in_int       = cfg_request ? ctl_xfer_data_in_std : ctl_xfer_data_in;
+  // assign ctl_tready_o               = cfg_request ? 1'b0 : ctl_xfer_data_in_ready_int;
+  assign ctl_tready_o               = ctl_xfer_data_in_ready_int;
+
+  assign ctl_xfer_accept_int        = cfg_request ? ctl_xfer_accept_std : ctl_xfer_accept_i;
+  assign ctl_xfer_done_int          = cfg_request ? 1'b1 : ctl_xfer_done;
+
+  assign ctl_xfer_data_in_valid_int = cfg_request ? ctl_xfer_data_in_valid_std : ctl_tvalid_i;
+  assign ctl_xfer_data_in_last_int  = cfg_request ? ctl_xfer_data_in_last_std : ctl_tlast_i;
+  assign ctl_xfer_data_in_int       = cfg_request ? ctl_xfer_data_in_std : ctl_tdata_i;
+
+
+  assign cfg_request                = cfg_request_q;  // | cfg_request_w;
+
+  always @(posedge usb_clock) begin
+    cfg_request_q <= cfg_request_w;
+  end
 
 
   // -- AXI4 stream to/from ULPI stream -- //
@@ -197,7 +207,7 @@ module usb_tlp #(
       .ulpi_nxt(ulpi_nxt),
       .ulpi_stp(ulpi_stp),
       .ulpi_reset(ulpi_reset),
-      .ulpi_clk(ulpi_clk60),
+      .ulpi_clk(usb_clock),
 
       .axis_rx_tvalid_o(axis_rx_tvalid),
       .axis_rx_tready_i(axis_rx_tready),
@@ -212,7 +222,7 @@ module usb_tlp #(
       .ulpi_rx_overflow_o(ulpi_rx_overflow_o),
 
       .usb_vbus_valid_o(usb_vbus_valid),
-      .usb_reset_o(usb_reset_int),
+      .usb_reset_o(usb_reset),
       .usb_idle_o(usb_idle),
       .usb_suspend_o(usb_suspend)
   );
@@ -221,8 +231,8 @@ module usb_tlp #(
   // -- Encode/decode USB packets, over the AXI4 streams -- //
 
   encode_packet tx_usb_packet_inst (
-      .reset(usb_reset_int),
-      .clock(ulpi_clk60),
+      .reset(usb_reset),
+      .clock(usb_clock),
 
       .tx_tvalid_o(axis_tx_tvalid),
       .tx_tready_i(axis_tx_tready),
@@ -238,17 +248,17 @@ module usb_tlp #(
       .tok_type_i(2'bx),
       .tok_data_i(16'bx),
 
-      .trn_start_i(tx_trn_data_start),
-      .trn_type_i(tx_trn_data_type),
+      .trn_start_i (tx_trn_data_start),
+      .trn_type_i  (tx_trn_data_type),
       .trn_tvalid_i(tx_trn_data_valid),
       .trn_tready_o(tx_trn_data_ready),
-      .trn_tlast_i(tx_trn_data_last),
-      .trn_tdata_i(tx_trn_data)
+      .trn_tlast_i (tx_trn_data_last),
+      .trn_tdata_i (tx_trn_data)
   );
 
   decode_packet rx_usb_packet_inst (
-      .reset(usb_reset_int),
-      .clock(ulpi_clk60),
+      .reset(usb_reset),
+      .clock(usb_clock),
 
       .rx_tvalid_i(axis_rx_tvalid),
       .rx_tready_o(axis_rx_tready),
@@ -265,9 +275,9 @@ module usb_tlp #(
       .crc_err_o(usb_crc_error_int),
 
       .rx_trn_valid_o(rx_trn_valid),
-      .rx_trn_end_o(rx_trn_end),
-      .rx_trn_type_o(rx_trn_data_type),
-      .rx_trn_data_o(rx_trn_data),
+      .rx_trn_end_o  (rx_trn_end),
+      .rx_trn_type_o (rx_trn_data_type),
+      .rx_trn_data_o (rx_trn_data),
 
       .trn_hsk_type_o(rx_trn_hsk_type),
       .trn_hsk_recv_o(rx_trn_hsk_recv)
@@ -279,8 +289,8 @@ module usb_tlp #(
   usb_xfer #(
       .HIGH_SPEED(HIGH_SPEED)
   ) usb_xfer_inst (
-      .rst(usb_reset_int),
-      .clk(ulpi_clk60),
+      .rst(usb_reset),
+      .clk(usb_clock),
 
       .trn_type(trn_type),
       .trn_address(trn_address),
@@ -297,6 +307,7 @@ module usb_tlp #(
       .tx_trn_hsk_type(tx_trn_hsk_type),
       .tx_trn_send_hsk(tx_trn_send_hsk),
       .tx_trn_hsk_sent(tx_trn_hsk_sent),
+
       .tx_trn_data_type(tx_trn_data_type),
       .tx_trn_data_start(tx_trn_data_start),
       .tx_trn_data(tx_trn_data),
@@ -318,12 +329,13 @@ module usb_tlp #(
 
       .ctl_xfer_data_out(ctl_xfer_data_out),
       .ctl_xfer_data_out_valid(ctl_xfer_data_out_valid_int),
-      .ctl_xfer_data_in(ctl_xfer_data_in_int),
-      .ctl_xfer_data_in_valid(ctl_xfer_data_in_valid_int),
-      .ctl_xfer_data_in_last(ctl_xfer_data_in_last_int),
-      .ctl_xfer_data_in_ready(ctl_xfer_data_in_ready_int),
 
-      .blk_xfer_endpoint_o(blk_xfer_endpoint), // 4-bit EP address
+      .ctl_tvalid_i(ctl_xfer_data_in_valid_int),
+      .ctl_tready_o(ctl_xfer_data_in_ready_int),
+      .ctl_tlast_i (ctl_xfer_data_in_last_int),
+      .ctl_tdata_i (ctl_xfer_data_in_int),
+
+      .blk_xfer_endpoint_o(blk_xfer_endpoint),  // 4-bit EP address
       .blk_in_xfer_o(blk_in_xfer),
       .blk_out_xfer_o(blk_out_xfer),
 
@@ -342,6 +354,31 @@ module usb_tlp #(
 
   // -- USB configuration endpoint -- //
 
+  // fixme: inserting the following skid-register breaks the USB core, therefore
+  //   not AXI4-Stream compatible ...
+
+  wire cfgi_tvalid_w, cfgi_tready_w, cfgi_tlast_w;
+  wire [7:0] cfgi_tdata_w;
+
+  axis_skid #(
+      .WIDTH (8),
+      .BYPASS(1)
+  ) cfg_skid_in_reg_inst (
+      .clock(usb_clock),
+      .reset(usb_reset),
+
+      .s_tvalid(cfgi_tvalid_w),
+      .s_tready(cfgi_tready_w),
+      .s_tlast (cfgi_tlast_w),
+      .s_tdata (cfgi_tdata_w),
+
+      .m_tvalid(ctl_xfer_data_in_valid_std),
+      .m_tready(ctl_xfer_data_in_ready_int),
+      .m_tlast (ctl_xfer_data_in_last_std),
+      .m_tdata (ctl_xfer_data_in_std)
+  );
+
+
   // todo:
   //  - this module is messy -- does it work well enough?
   //  - does wrapping in skid-buffers break it !?
@@ -358,8 +395,8 @@ module usb_tlp #(
       .CONFIG_DESC(CONFIG_DESC),
       .HIGH_SPEED(HIGH_SPEED)
   ) usb_std_request_inst (
-      .rst(usb_reset_int),
-      .clk(ulpi_clk60),
+      .reset(usb_reset),
+      .clock(usb_clock),
 
       .ctl_xfer_endpoint(ctl_xfer_endpoint_int),
       .ctl_xfer_type(ctl_xfer_type_int),
@@ -367,21 +404,20 @@ module usb_tlp #(
       .ctl_xfer_value(ctl_xfer_value_int),
       .ctl_xfer_index(ctl_xfer_index_int),
       .ctl_xfer_length(ctl_xfer_length_int),
-      .ctl_xfer_accept(ctl_xfer_accept_std),
-      .ctl_xfer(ctl_xfer_int),
-      .ctl_xfer_done(ctl_xfer_done_std),
-      .ctl_xfer_data_out(ctl_xfer_data_out),
-      .ctl_xfer_data_out_valid(ctl_xfer_data_out_valid_int),
-      .ctl_xfer_data_in(ctl_xfer_data_in_std),
-      .ctl_xfer_data_in_valid(ctl_xfer_data_in_valid_std),
-      .ctl_xfer_data_in_last(ctl_xfer_data_in_last_std),
-      .ctl_xfer_data_in_ready(ctl_xfer_data_in_ready_int),
+
+      .ctl_xfer_gnt_o(ctl_xfer_accept_std),
+      .ctl_xfer_req_i(ctl_xfer_int),
+
+      .ctl_tvalid_o(cfgi_tvalid_w),
+      .ctl_tready_i(cfgi_tready_w),
+      .ctl_tlast_o (cfgi_tlast_w),
+      .ctl_tdata_o (cfgi_tdata_w),
 
       .device_address(device_address),
       .current_configuration(current_configuration),
       .configured(usb_configured),
-      .standart_request(cfg_request)
+      .standart_request(cfg_request_w)
   );
 
 
-endmodule // usb_tlp
+endmodule  // usb_tlp

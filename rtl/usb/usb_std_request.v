@@ -37,23 +37,24 @@ module usb_std_request #(
     },
     parameter integer HIGH_SPEED = 1
 ) (
-    input wire rst,
-    input wire clk,
-    input wire [3:0] ctl_xfer_endpoint,
-    input wire [7:0] ctl_xfer_type,
-    input wire [7:0] ctl_xfer_request,
+    input wire reset,
+    input wire clock,
+
+    input wire [ 3:0] ctl_xfer_endpoint,
+    input wire [ 7:0] ctl_xfer_type,
+    input wire [ 7:0] ctl_xfer_request,
     input wire [15:0] ctl_xfer_value,
     input wire [15:0] ctl_xfer_index,
     input wire [15:0] ctl_xfer_length,
-    output wire ctl_xfer_accept,
-    input wire ctl_xfer,
-    output wire ctl_xfer_done,
-    input wire [7:0] ctl_xfer_data_out,
-    input wire ctl_xfer_data_out_valid,
-    output wire [7:0] ctl_xfer_data_in,
-    output wire ctl_xfer_data_in_valid,
-    output wire ctl_xfer_data_in_last,
-    input wire ctl_xfer_data_in_ready,
+
+    output wire ctl_xfer_gnt_o,
+    input  wire ctl_xfer_req_i,
+
+    output wire ctl_tvalid_o,
+    input wire ctl_tready_i,
+    output wire ctl_tlast_o,
+    output wire [7:0] ctl_tdata_o,
+
     output wire [6:0] device_address,
     output wire [7:0] current_configuration,
     output wire configured,
@@ -162,25 +163,31 @@ module usb_std_request #(
   localparam DESC_CONFIG_START = DEVICE_DESC_LEN;
   localparam DESC_STRING_START = DEVICE_DESC_LEN + CONFIG_DESC_LEN;
 
-  localparam [1:0]
-	STATE_IDLE = 2'd0, 
-	STATE_GET_DESC = 2'd01,
-	STATE_SET_CONF = 2'd02,
-	STATE_SET_ADDR = 2'd03;
+  localparam DESC_START0 = DESC_STRING_START;
+  localparam DESC_START1 = DESC_START0 + STR_DESC_LEN;
+  localparam DESC_START2 = DESC_START1 + MANUFACTURER_STR_DESC_LEN;
+  localparam DESC_START3 = DESC_START2 + PRODUCT_STR_DESC_LEN;
 
-  reg [1:0] state;
+  localparam [2:0]
+	STATE_IDLE = 3'd0, 
+	STATE_GET_DESC = 3'd1,
+	STATE_SET_CONF = 3'd2,
+	STATE_SET_ADDR = 3'd4;
+
+  reg [2:0] state;
   reg [7:0] mem_addr;
   reg [7:0] max_mem_addr;
-  reg [2:0] req_type;
 
-  /* Request types:
-	000 - None
-	001 - Get device descriptor
-	010 - Set address
-	011 - Get configuration descriptor
-	100 - Set configuration
-	101 - Get string descriptor
-*/
+  /**
+   * Request types:
+   *	000 - None
+   *	001 - Get device descriptor
+   *	010 - Set address
+   *	011 - Get configuration descriptor
+   *	100 - Set configuration
+   *	101 - Get string descriptor
+   */
+  reg [2:0] req_type;
 
   reg [6:0] device_address_int;
   reg [7:0] current_configuration_int;
@@ -189,6 +196,9 @@ module usb_std_request #(
   wire is_std_req;
   wire is_dev_req;
   wire handle_req;
+
+  reg tlast, gnt_q;
+  wire [7:0] mem_addr_nxt = mem_addr + 1;
 
 
   assign device_address = device_address_int;
@@ -200,34 +210,95 @@ module usb_std_request #(
   assign handle_req = is_std_req & is_dev_req;
   assign standart_request = is_std_req;
 
-  assign ctl_xfer_data_in_valid = state == STATE_GET_DESC;
-  assign ctl_xfer_data_in = USB_DESC[8*(mem_addr+1)-1-:8];
-  assign ctl_xfer_data_in_last = state == STATE_GET_DESC && mem_addr == max_mem_addr;
-  assign ctl_xfer_done = 1'b1;
-  assign ctl_xfer_accept = req_type != 3'b000;
+  // assign ctl_xfer_gnt_o = req_type != 3'b000;
+  assign ctl_xfer_gnt_o = gnt_q;
+
+  // assign ctl_tvalid_o = state == STATE_GET_DESC;
+  assign ctl_tvalid_o = state[0];
+  assign ctl_tdata_o = USB_DESC[8*(mem_addr+1)-1-:8];
+  // assign ctl_tlast_o = state == STATE_GET_DESC && mem_addr == max_mem_addr;
+  assign ctl_tlast_o = tlast;
 
 
-  always @(posedge clk) begin
-    if (rst) begin
+  always @(posedge clock) begin
+    if (reset) begin
+    end else begin
+      if (state == STATE_GET_DESC && ctl_tvalid_o && ctl_tready_i) begin
+        tlast <= mem_addr_nxt == max_mem_addr;
+      end else if (tlast && ctl_tvalid_o && ctl_tready_i) begin
+        tlast <= 1'b0;
+      end
+
+      gnt_q <= req_type != 3'b000;
+    end
+  end
+
+  always @(posedge clock) begin
+    if (reset) begin
+    end else begin
+      case (state)
+        default: begin
+          if (ctl_xfer_req_i) begin
+            if (req_type == 3'b011) begin
+              mem_addr <= DESC_CONFIG_START;
+              max_mem_addr <= DESC_STRING_START - 1;
+            end else if (DESC_HAS_STRINGS && (req_type == 3'b101)) begin
+              if (ctl_xfer_value[7:0] == 8'h00) begin
+                mem_addr <= DESC_START0;
+                max_mem_addr <= DESC_START1 - 1;
+              end else if (ctl_xfer_value[7:0] == 8'h01) begin
+                mem_addr <= DESC_START1;
+                max_mem_addr <= DESC_START2 - 1;
+              end else if (ctl_xfer_value[7:0] == 8'h02) begin
+                mem_addr <= DESC_START2;
+                max_mem_addr <= DESC_START3 - 1;
+              end else if (ctl_xfer_value[7:0] == 8'h03) begin
+                mem_addr <= DESC_START3;
+                max_mem_addr <= DESC_SIZE - 1;
+              end
+            end else begin
+              mem_addr <= 0;
+              max_mem_addr <= DESC_CONFIG_START - 1;
+            end
+          end else begin
+            // mem_addr <= 0;
+          end
+        end
+        STATE_GET_DESC: begin
+          if (ctl_tready_i) begin
+            // if (mem_addr != max_mem_addr) begin
+            mem_addr <= mem_addr_nxt;
+            // end
+          end
+        end
+      endcase
+    end
+  end
+
+  /*
+  always @(posedge clock) begin
+    if (reset) begin
+
+      // todo: faster with this air-gap !?
 
     end else begin
       if (state == STATE_IDLE) begin
-        if (ctl_xfer) begin
+        if (ctl_xfer_req_i) begin
           if (req_type == 3'b011) begin
             mem_addr <= DESC_CONFIG_START;
             max_mem_addr <= DESC_STRING_START - 1;
           end else if (DESC_HAS_STRINGS && (req_type == 3'b101)) begin
             if (ctl_xfer_value[7:0] == 8'h00) begin
-              mem_addr <= DESC_STRING_START;
-              max_mem_addr <= DESC_STRING_START + STR_DESC_LEN - 1;
+              mem_addr <= DESC_START0;
+              max_mem_addr <= DESC_START1 - 1;
             end else if (ctl_xfer_value[7:0] == 8'h01) begin
-              mem_addr <= DESC_STRING_START + STR_DESC_LEN;
-              max_mem_addr <= DESC_STRING_START + STR_DESC_LEN + MANUFACTURER_STR_DESC_LEN - 1;
+              mem_addr <= DESC_START1;
+              max_mem_addr <= DESC_START2 - 1;
             end else if (ctl_xfer_value[7:0] == 8'h02) begin
-              mem_addr <= DESC_STRING_START + STR_DESC_LEN + MANUFACTURER_STR_DESC_LEN;
-              max_mem_addr <= DESC_STRING_START + STR_DESC_LEN + MANUFACTURER_STR_DESC_LEN + PRODUCT_STR_DESC_LEN - 1;
+              mem_addr <= DESC_START2;
+              max_mem_addr <= DESC_START3 - 1;
             end else if (ctl_xfer_value[7:0] == 8'h03) begin
-              mem_addr <= DESC_STRING_START + STR_DESC_LEN + MANUFACTURER_STR_DESC_LEN + PRODUCT_STR_DESC_LEN;
+              mem_addr <= DESC_START3;
               max_mem_addr <= DESC_SIZE - 1;
             end
           end else begin
@@ -237,23 +308,24 @@ module usb_std_request #(
         end else begin
           mem_addr <= 0;
         end
-      end else if ((state == STATE_GET_DESC) && ctl_xfer_data_in_ready) begin
+      end else if ((state == STATE_GET_DESC) && ctl_tready_i) begin
         if (mem_addr != max_mem_addr) begin
           mem_addr <= mem_addr + 1;
         end
       end
     end
   end
+*/
 
-  always @(posedge clk) begin
-    if (rst) begin
+  always @(posedge clock) begin
+    if (reset) begin
       state <= STATE_IDLE;
       device_address_int <= 0;
       configured_int <= 1'b0;
     end else begin
       case (state)
-        STATE_IDLE: begin
-          if (ctl_xfer) begin
+        default: begin
+          if (ctl_xfer_req_i) begin
             if ((req_type == 3'b001) || (req_type == 3'b011) || (req_type == 3'b101)) begin
               state <= STATE_GET_DESC;
             end else if (req_type == 3'b010) begin
@@ -265,18 +337,18 @@ module usb_std_request #(
           end
         end
         STATE_SET_ADDR: begin
-          if (!ctl_xfer) begin
+          if (!ctl_xfer_req_i) begin
             state <= STATE_IDLE;
             device_address_int <= ctl_xfer_value[6:0];
           end
         end
         STATE_GET_DESC: begin
-          if (!ctl_xfer) begin
+          if (!ctl_xfer_req_i) begin
             state <= STATE_IDLE;
           end
         end
         STATE_SET_CONF: begin
-          if (!ctl_xfer) begin
+          if (!ctl_xfer_req_i) begin
             configured_int <= 1'b1;
             state <= STATE_IDLE;
           end
@@ -287,17 +359,17 @@ module usb_std_request #(
 
   always @(*) begin
     if (handle_req && (ctl_xfer_request == 8'h06) && (ctl_xfer_value[15:8] == 8'h01)) begin
-      req_type <= 3'b001;
+      req_type = 3'b001;
     end else if (handle_req && (ctl_xfer_request == 8'h05)) begin
-      req_type <= 3'b010;
+      req_type = 3'b010;
     end else if (handle_req && (ctl_xfer_request == 8'h06) && (ctl_xfer_value[15:8] == 8'h02)) begin
-      req_type <= 3'b011;
+      req_type = 3'b011;
     end else if (handle_req && (ctl_xfer_request == 8'h09)) begin
-      req_type <= 3'b100;
+      req_type = 3'b100;
     end else if (handle_req && (ctl_xfer_request == 8'h06) && (ctl_xfer_value[15:8] == 8'h03)) begin
-      req_type <= 3'b101;
+      req_type = 3'b101;
     end else begin
-      req_type <= 3'b000;
+      req_type = 3'b000;
     end
   end
 
