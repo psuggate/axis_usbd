@@ -8,11 +8,16 @@ module encode_packet (
     tx_tlast_o,
     tx_tdata_o,
 
-    hsk_type_i,  /* 00 - ACK, 10 - NAK, 11 - STALL, 01 - BLYAT */
+    hsk_type_i,  // 00 - ACK, 10 - NAK, 11 - STALL, 01 - BLYAT //
     hsk_send_i,
     hsk_done_o,
 
-    trn_type_i,  /* DATA0/1/2 MDATA */
+    tok_send_i,
+    tok_done_o,
+    tok_type_i,  // 00 - OUT, 01 - SOF, 10 - IN, 11 - SETUP //
+    tok_data_i,
+
+    trn_type_i,  // DATA0/1/2 MDATA //
     trn_start_i,
     trn_tvalid_i,
     trn_tready_o,
@@ -32,6 +37,11 @@ module encode_packet (
   input hsk_send_i;
   output hsk_done_o;
 
+  input tok_send_i;
+  output tok_done_o;
+  input [1:0] tok_type_i;
+  input [15:0] tok_data_i;
+
   input [1:0] trn_type_i;  /* DATA0/1/2 MDATA */
   input trn_start_i;
   input trn_tvalid_i;
@@ -41,16 +51,20 @@ module encode_packet (
 
 `include "usb_crc.vh"
 
-  localparam [6:0]
-	ST_IDLE     = 7'h01,
-	ST_HSK      = 7'h02,
-	ST_HSK_WAIT = 7'h04,
-	ST_DPID     = 7'h08,
-	ST_DATA     = 7'h10,
-	ST_CRC1     = 7'h20,
-	ST_CRC2     = 7'h40;
+  localparam [10:0]
+	ST_IDLE     = 11'h001,
+	ST_HSK      = 11'h002,
+	ST_HSK_WAIT = 11'h004,
+	ST_DPID     = 11'h008,
+	ST_DATA     = 11'h010,
+	ST_CRC1     = 11'h020,
+	ST_CRC2     = 11'h040,
+	ST_TOK1     = 11'h080,
+	ST_TOK2     = 11'h100,
+	ST_TOK3     = 11'h200,
+	ST_TOK4     = 11'h400;
 
-  reg [6:0] state;
+  reg [10:0] state;
 
   reg [15:0] tx_crc16;
   wire [15:0] tx_crc16_nw;
@@ -58,10 +72,13 @@ module encode_packet (
   reg tvld, tlst, xrdy;
   reg [7:0] tdat;
 
+  wire tx_ready;
+
 
   // -- Input/Output Assignments -- //
 
   assign hsk_done_o  = state == ST_HSK_WAIT;
+  assign tok_done_o  = state == ST_TOK4;
 
 
   // -- Internal Signals -- //
@@ -78,15 +95,14 @@ module encode_packet (
   always @(posedge clock) begin
     if (state == ST_IDLE) begin
       tx_crc16 <= 16'hFFFF;
-    end else if (state == ST_DATA && tx_tready_i && trn_tvalid_i) begin
+    end else if (state == ST_DATA && tx_ready && trn_tvalid_i) begin
+    // end else if (state == ST_DATA && tx_tready_i && trn_tvalid_i) begin
       tx_crc16 <= crc16(trn_tdata_i, tx_crc16);
     end
   end
 
 
   // -- Tx FSM -- //
-
-  wire tx_ready;
 
   always @(posedge clock) begin
     if (reset) begin
@@ -98,6 +114,9 @@ module encode_packet (
           if (hsk_send_i) begin
             state <= ST_HSK;
             zero_packet <= 1'bx;
+          end else if (tok_send_i) begin
+            state <= ST_TOK1;
+            zero_packet <= 1'bx;
           end else if (trn_start_i) begin
             state <= ST_DPID;
             zero_packet <= trn_tlast_i && !trn_tvalid_i;
@@ -106,6 +125,11 @@ module encode_packet (
             zero_packet <= 1'bx;
           end
         end
+
+        ST_TOK1: state <= tx_ready ? ST_TOK2 : state; 
+        ST_TOK2: state <= tx_ready ? ST_TOK3 : state; 
+        ST_TOK3: state <= tx_ready ? ST_TOK4 : state; 
+        ST_TOK4: state <= !tok_send_i ? ST_IDLE : state; 
 
         ST_HSK: begin
           if (tx_ready) begin
@@ -168,7 +192,7 @@ module encode_packet (
 
   // -- Tx Data-path -- //
 
-  // `define __upstream_flow_control_works
+`define __upstream_flow_control_works
 `ifdef __upstream_flow_control_works
   /**
    * TODO:
@@ -177,9 +201,9 @@ module encode_packet (
    */
   reg tx_cycle_q;
 
-  // assign trn_tready_o = xrdy;
+  assign trn_tready_o = xrdy;
   assign tx_ready = !tvld || tvld && tx_tready_i;
-  assign trn_tready_o = !tvld || tvld && tx_tready_i;
+  // assign trn_tready_o = !tvld || tvld && tx_tready_i;
   // assign tx_ready = tx_tready_i;
   // assign tx_ready = xrdy;
 
@@ -293,19 +317,26 @@ module encode_packet (
       tdat = tx_crc16_nw[7:0];
     end else if (state == ST_CRC2) begin
       tdat = tx_crc16_nw[15:8];
+    end else if (state == ST_TOK1) begin
+      tdat = {~{tok_type_i, 2'b01}, {tok_type_i, 2'b01}};
+    end else if (state == ST_TOK2) begin
+      tdat = tok_data_i[7:0];
+    end else if (state == ST_TOK3) begin
+      tdat = tok_data_i[15:8];
     end else begin
       tdat = trn_tdata_i;
     end
 
     if (state == ST_DPID || state == ST_HSK ||
         state == ST_CRC1 || state == ST_CRC2 ||
+        state == ST_TOK1 || state == ST_TOK2 || state == ST_TOK3 ||
         state == ST_DATA) begin
       tvld = 1'b1;
     end else begin
       tvld = 1'b0;
     end
 
-    if (state == ST_HSK || state == ST_CRC2) begin
+    if (state == ST_HSK || state == ST_CRC2 || state == ST_TOK3) begin
       tlst = 1'b1;
     end else begin
       tlst = 1'b0;
@@ -317,7 +348,7 @@ module encode_packet (
   //   register works, so does this mean that there is a problem upstream !?
   axis_skid #(
       .WIDTH (8),
-      .BYPASS(1)
+      .BYPASS(0)
   ) axis_skid_inst (
       .clock(clock),
       .reset(reset),

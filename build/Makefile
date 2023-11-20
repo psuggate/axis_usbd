@@ -9,5 +9,5 @@ sim:	$(VCD)
 clean:
 	rm -f $(OUT)
 
-../vcd/%.vcd: %.out
+%.vcd: %.out
 	./$<

@@ -48,12 +48,13 @@ module decode_packet #(
 
   reg [10:0] token_data;
   reg [4:0] token_crc5;
-  reg [15:0] rx_crc16;
-  reg [7:0] rx_buf1, rx_buf2;
+  reg [7:0] rx_buf1, rx_buf0;
   wire addr_match_w;
   wire [15:0] rx_data_crc_w;
   wire [4:0] rx_crc5_w;
   wire [3:0] rx_pid_pw, rx_pid_nw;
+  wire [15:0] crc16_nw;
+  reg [15:0] crc16_q;
 
   reg sof_flag, crc_err_flag;
   reg trn_start_q, rx_trn_end_q, rx_trn_hsk_recv_q;
@@ -89,7 +90,7 @@ module decode_packet #(
   assign rx_pid_pw     = rx_tdata_i[3:0];
   assign rx_pid_nw     = ~rx_tdata_i[7:4];
   assign rx_crc5_w     = crc5(token_data);
-  assign rx_data_crc_w = {rx_buf2, rx_buf1};
+  assign rx_data_crc_w = {rx_buf0, rx_buf1};
   assign addr_match_w  = trn_address_o == usb_address_i;
 
 
@@ -113,18 +114,26 @@ module decode_packet #(
     end
 
     if (rx_tvalid_i) begin
-      {rx_buf1, rx_buf2} <= {rx_buf2, rx_tdata_i};
+      {rx_buf1, rx_buf0} <= {rx_buf0, rx_tdata_i};
     end else begin
-      {rx_buf1, rx_buf2} <= {rx_buf2, 8'bx};
+      {rx_buf1, rx_buf0} <= {rx_buf0, 8'bx};
     end
   end
 
-  /* Rx Data CRC Calculation */
+
+  // -- Rx Data CRC Calculation -- //
+
+  assign crc16_nw = ~{crc16_q[0], crc16_q[1], crc16_q[2], crc16_q[3],
+                      crc16_q[4], crc16_q[5], crc16_q[6], crc16_q[7],
+                      crc16_q[8], crc16_q[9], crc16_q[10], crc16_q[11],
+                      crc16_q[12], crc16_q[13], crc16_q[14], crc16_q[15]
+                     };
+
   always @(posedge clock) begin
-    if (state == ST_IDLE) begin
-      rx_crc16 <= 16'hFFFF;
-    end else if (state == ST_DATA && rx_tvalid_i && rx_vld1) begin
-      rx_crc16 <= crc16(rx_buf1, rx_crc16);
+    if (!rx_vld1) begin
+      crc16_q <= 16'hffff;
+    end else begin
+      crc16_q <= crc16(rx_buf1, crc16_q);
     end
   end
 
@@ -141,7 +150,7 @@ module decode_packet #(
   always @(posedge clock) begin
     case (state)
       ST_SOF_CRC, ST_TOKEN_CRC: crc_err_flag <= token_crc5 != rx_crc5_w;
-      ST_DATA_CRC: crc_err_flag <= rx_data_crc_w != rx_crc16;
+      ST_DATA_CRC: crc_err_flag <= rx_data_crc_w != crc16_nw;
       default: crc_err_flag <= 1'b0;
     endcase
   end

@@ -220,7 +220,7 @@ module usb_tlp #(
 
   // -- Encode/decode USB packets, over the AXI4 streams -- //
 
-  encode_packet tx_usb_packet_inst (
+  usb_encode tx_usb_packet_inst (
       .reset(usb_reset_int),
       .clock(ulpi_clk60),
 
@@ -232,6 +232,11 @@ module usb_tlp #(
       .hsk_send_i(tx_trn_send_hsk),
       .hsk_done_o(tx_trn_hsk_sent),
       .hsk_type_i(tx_trn_hsk_type),
+
+      .tok_send_i(1'b0),
+      .tok_done_o(),
+      .tok_type_i(2'bx),
+      .tok_data_i(16'bx),
 
       .trn_start_i(tx_trn_data_start),
       .trn_type_i(tx_trn_data_type),
@@ -337,6 +342,9 @@ module usb_tlp #(
 
   // -- USB configuration endpoint -- //
 
+  // todo:
+  //  - this module is messy -- does it work well enough?
+  //  - does wrapping in skid-buffers break it !?
   usb_std_request #(
       .VENDOR_ID(VENDOR_ID),
       .PRODUCT_ID(PRODUCT_ID),
@@ -375,4 +383,5 @@ module usb_tlp #(
       .standart_request(cfg_request)
   );
 
-endmodule
+
+endmodule // usb_tlp
