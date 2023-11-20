@@ -82,6 +82,9 @@ wire tvalid_next, xvalid_next, uready_next;
 
 reg [15:0] crc16_q;
 
+reg xhsk_q, xtok_q, xdat_q, zero_q, xcrc_q;
+reg hend_q, kend_q;
+
 
 assign hsk_done_o = hend_q;
 assign tok_done_o = kend_q;
@@ -116,38 +119,74 @@ assign tvalid_next = dst_valid(trn_tvalid_i, xvalid, tvalid, tx_tready_i);
   end
 
 
-// -- FSM -- //
+`ifndef __potato_salad
 
-reg xhsk_q, xtok_q, xdat_q, zero_q, xcrc_q;
-reg hend_q, kend_q;
+// -- ACKs for Handshakes and Tokens -- //
+
+always @(posedge clock) begin
+  if (!hsk_send_i) begin
+    hend_q <= 1'b0;
+  end else if (xhsk_q && hsk_send_i && tx_tready_i) begin
+    hend_q <= 1'b1;
+  end else begin
+    hend_q <= hend_q;
+  end
+end
+
+always @(posedge clock) begin
+  if (!tok_send_i) begin
+    kend_q <= 1'b0;
+  end else if (xtok_q && tok_send_i && tlast && tx_tready_i) begin
+    kend_q <= 1'b1;
+  end else begin
+    kend_q <= kend_q;
+  end
+end
+
+
+// -- FSM -- //
 
 wire [2:0] state = {xdat_q, xtok_q, xhsk_q};
 
 always @(posedge clock) begin
   if (reset) begin
     {xdat_q, xtok_q, xhsk_q, zero_q, xcrc_q} <= 5'b00000;
-    {kend_q, hend_q} <= 2'b00;
 
     uready <= 1'b0;
     tvalid <= 1'b0;
     tlast  <= 1'b0;
     tdata  <= 8'bx;
+
+    xvalid <= 1'b0;
+    xlast  <= 1'bx;
+    xdata  <= 8'bx;
   end else begin
     case (state)
         3'b001: begin
           // Handshake packet
-          if (!hsk_send_i && hend_q) begin
-            hend_q <= 1'b0;
+          if (!hsk_send_i) begin
             xhsk_q <= 1'b0;
-          end else if (tx_tready_i) begin
+          end
+
+          if (tx_tready_i) begin
             tvalid <= 1'b0;
             tlast  <= 1'b0;
-            hend_q <= 1'b1;
           end
+
+          zero_q <= 1'bx;
+          xcrc_q <= 1'bx;
+          uready <= 1'b0;
+          xvalid <= 1'b0;
+          xlast  <= 1'bx;
+          xdata  <= 8'bx;
         end
 
         3'b010: begin
           // Token packet
+          if (!tok_send_i) begin
+            xtok_q <= 1'b0;
+          end
+
           if (tx_tready_i) begin
             if (zero_q) begin
               zero_q <= 1'b0;
@@ -156,8 +195,6 @@ always @(posedge clock) begin
               tlast  <= 1'b0;
               tdata  <= tok_data_i[7:0];
             end else if (tlast) begin
-              kend_q <= 1'b1;
-
               tvalid <= 1'b0;
               tlast  <= 1'b0;
               tdata  <= 8'bx;
@@ -166,9 +203,6 @@ always @(posedge clock) begin
               tlast  <= 1'b1;
               tdata  <= tok_data_i[15:8];
             end
-          end else if (kend_q && !tok_send_i) begin
-            xtok_q <= 1'b0;
-            kend_q <= 1'b0;
           end
         end
 
@@ -219,8 +253,6 @@ always @(posedge clock) begin
         end
 
         default: begin
-          {kend_q, hend_q} <= 3'b000;
-
           if (hsk_send_i) begin
             {xdat_q, xtok_q, xhsk_q} <= 3'b001;
 
@@ -258,11 +290,10 @@ always @(posedge clock) begin
   end
 end
 
+`else
 
-`ifdef __potato_salad
 always @(posedge clock) begin
   if (reset) begin
-    idle_q <= 1'b1;
     {xdat_q, xtok_q, xhsk_q, zero_q, xcrc_q} <= 5'b000;
     {kend_q, hend_q} <= 5'b000;
 
@@ -271,6 +302,8 @@ always @(posedge clock) begin
     tlast  <= 1'b0;
     tdata  <= 8'bx;
   end else if (xhsk_q) begin
+
+    // Handshake packet
     if (!hsk_send_i && hend_q) begin
       hend_q <= 1'b0;
       xhsk_q <= 1'b0;
@@ -279,7 +312,10 @@ always @(posedge clock) begin
       tlast  <= 1'b0;
       hend_q <= 1'b1;
     end
+
   end else if (xtok_q) begin
+
+    // Token packet
     if (tx_tready_i) begin
       if (zero_q) begin
         zero_q <= 1'b0;
@@ -302,19 +338,54 @@ always @(posedge clock) begin
       xtok_q <= 1'b0;
       kend_q <= 1'b0;
     end
-  end else if (xdat_q) begin
-    if ((zero_q || xcrc_q) && tx_tready_i) begin
-      {xdat_q, zero_q, xcrc_q} <= 3'b000;
 
-      uready <= 1'b0; // note: was already zero
-      tvalid <= 1'b0;
+  end else if (xdat_q) begin
+
+    if (xcrc_q && tx_tready_i) begin
+      // Sending 2nd byte of CRC16
+      if (tlast) begin
+        {xdat_q, xcrc_q} <= 2'b00;
+
+        tvalid <= 1'b0;
+        tlast  <= 1'b0;
+        tdata  <= 8'bx;
+      end else begin
+        tvalid <= 1'b1;
+        tlast  <= 1'b1;
+        tdata  <= crc16_nw[15:8];
+      end
+    end else if (tx_tready_i && (zero_q || !trn_tvalid_i)) begin
+      // Sending 1st byte of CRC16
+      {zero_q, xcrc_q} <= 2'b01;
+
+      tvalid <= 1'b1;
       tlast  <= 1'b0;
-      tdata  <= 8'bx;
-    end else if (uready && tx_ready_i) begin
-      
+      tdata  <= crc16_nw[7:0];
+    end else begin
+      // Transfer data from source to destination
+      if (uready && trn_tvalid_i && trn_tlast_i) begin
+        uready <= 1'b0;
+      end else begin
+        uready <= uready_next;
+      end
+      tvalid <= tvalid_next;
+      xvalid <= xvalid_next;
+
+      if (src_to_dst(uready, tvalid, tx_tready_i)) begin
+        tdata  <= trn_tdata_i;
+        zero_q <= trn_tlast_i;
+      end else if (tmp_to_dst(xvalid, tx_tready_i)) begin
+        tdata <= xdata;
+        zero_q <= xlast;
+      end
+
+      if (src_to_tmp(uready, tvalid, tx_tready_i)) begin
+        xdata <= trn_tdata_i;
+        xlast <= trn_tlast_i;
+      end
     end
-  end else if (idle_q) begin // todo: don't need this state ??
-    idle_q <= !(hsk_send_i || tok_send_i || trn_start_i);
+
+  end else begin // todo: don't need this state ??
     {kend_q, hend_q} <= 3'b000;
 
     if (hsk_send_i) begin
@@ -325,7 +396,8 @@ always @(posedge clock) begin
       tlast  <= 1'b1;
       tdata  <= {~{hsk_type_i, 2'b10}, hsk_type_i, 2'b10};
     end else if (tok_send_i) begin
-      {xdat_q, xtok_q, xhsk_q, zero_q, xcrc_q} <= 5'b01010;
+      {xdat_q, xtok_q, xhsk_q} <= 5'b010;
+      zero_q <= 1'b1;
 
       uready <= 1'b0; // data not coming from upstream
       tvalid <= 1'b1;
@@ -333,15 +405,15 @@ always @(posedge clock) begin
       tdata  <= {~{tok_type_i, 2'b01}, {tok_type_i, 2'b01}};
     end else if (trn_start_i) begin
       {xdat_q, xtok_q, xhsk_q} <= 3'b100;
-
       zero_q <= trn_tlast_i; // PID-only packet ??
 
-      uready <= 1'b0; // not ready for upstream data
+      uready <= 1'b1;
       tvalid <= 1'b1;
       tlast  <= 1'b0;
       tdata  <= {~{trn_type_i, 2'b11}, {trn_type_i, 2'b11}};
     end else begin
       {xdat_q, xtok_q, xhsk_q} <= 3'b000;
+      {zero_q, xcrc_q} <= 2'b00;
 
       uready <= 1'b0;
       tvalid <= 1'b0;
