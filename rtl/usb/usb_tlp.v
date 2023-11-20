@@ -150,8 +150,6 @@ module usb_tlp #(
   wire ctl_xfer_data_in_ready_int;
 
   wire [7:0] ctl_xfer_data_in_std;
-  wire ctl_xfer_data_in_valid_std;
-  wire ctl_xfer_data_in_last_std;
 
   wire [7:0] current_configuration;
   wire usb_reset_int;
@@ -159,6 +157,9 @@ module usb_tlp #(
   reg cfg_request_q;
   wire cfg_request, cfg_request_w;
   wire [6:0] device_address;
+
+  wire cfgi_tvalid_w, cfgi_tready_w, cfgi_tlast_w;
+  wire [7:0] cfgi_tdata_w;
 
 
   assign usb_clock                  = ulpi_clk60;
@@ -176,15 +177,14 @@ module usb_tlp #(
   assign ctl_xfer_request_o         = cfg_request ? 1'b0 : ctl_xfer_int;
   assign ctl_xfer_data_out_valid    = cfg_request ? 1'b0 : ctl_xfer_data_out_valid_int;
 
-  // assign ctl_tready_o               = cfg_request ? 1'b0 : ctl_xfer_data_in_ready_int;
-  assign ctl_tready_o               = ctl_xfer_data_in_ready_int;
+  assign ctl_tready_o               = cfgi_tready_w;
 
   assign ctl_xfer_accept_int        = cfg_request ? ctl_xfer_accept_std : ctl_xfer_accept_i;
   assign ctl_xfer_done_int          = cfg_request ? 1'b1 : ctl_xfer_done;
 
-  assign ctl_xfer_data_in_valid_int = cfg_request ? ctl_xfer_data_in_valid_std : ctl_tvalid_i;
-  assign ctl_xfer_data_in_last_int  = cfg_request ? ctl_xfer_data_in_last_std : ctl_tlast_i;
-  assign ctl_xfer_data_in_int       = cfg_request ? ctl_xfer_data_in_std : ctl_tdata_i;
+  assign ctl_xfer_data_in_valid_int = cfg_request ? cfgi_tvalid_w : ctl_tvalid_i;
+  assign ctl_xfer_data_in_last_int  = cfg_request ? cfgi_tlast_w  : ctl_tlast_i;
+  assign ctl_xfer_data_in_int       = cfg_request ? cfgi_tdata_w  : ctl_tdata_i;
 
 
   assign cfg_request                = cfg_request_q;  // | cfg_request_w;
@@ -331,7 +331,7 @@ module usb_tlp #(
       .ctl_xfer_data_out_valid(ctl_xfer_data_out_valid_int),
 
       .ctl_tvalid_i(ctl_xfer_data_in_valid_int),
-      .ctl_tready_o(ctl_xfer_data_in_ready_int),
+      .ctl_tready_o(cfgi_tready_w),
       .ctl_tlast_i (ctl_xfer_data_in_last_int),
       .ctl_tdata_i (ctl_xfer_data_in_int),
 
@@ -353,31 +353,6 @@ module usb_tlp #(
 
 
   // -- USB configuration endpoint -- //
-
-  // fixme: inserting the following skid-register breaks the USB core, therefore
-  //   not AXI4-Stream compatible ...
-
-  wire cfgi_tvalid_w, cfgi_tready_w, cfgi_tlast_w;
-  wire [7:0] cfgi_tdata_w;
-
-  axis_skid #(
-      .WIDTH (8),
-      .BYPASS(1)
-  ) cfg_skid_in_reg_inst (
-      .clock(usb_clock),
-      .reset(usb_reset),
-
-      .s_tvalid(cfgi_tvalid_w),
-      .s_tready(cfgi_tready_w),
-      .s_tlast (cfgi_tlast_w),
-      .s_tdata (cfgi_tdata_w),
-
-      .m_tvalid(ctl_xfer_data_in_valid_std),
-      .m_tready(ctl_xfer_data_in_ready_int),
-      .m_tlast (ctl_xfer_data_in_last_std),
-      .m_tdata (ctl_xfer_data_in_std)
-  );
-
 
   // todo:
   //  - this module is messy -- does it work well enough?

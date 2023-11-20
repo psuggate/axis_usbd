@@ -210,13 +210,10 @@ module usb_std_request #(
   assign handle_req = is_std_req & is_dev_req;
   assign standart_request = is_std_req;
 
-  // assign ctl_xfer_gnt_o = req_type != 3'b000;
   assign ctl_xfer_gnt_o = gnt_q;
 
-  // assign ctl_tvalid_o = state == STATE_GET_DESC;
   assign ctl_tvalid_o = state[0];
   assign ctl_tdata_o = USB_DESC[8*(mem_addr+1)-1-:8];
-  // assign ctl_tlast_o = state == STATE_GET_DESC && mem_addr == max_mem_addr;
   assign ctl_tlast_o = tlast;
 
 
@@ -260,62 +257,16 @@ module usb_std_request #(
               mem_addr <= 0;
               max_mem_addr <= DESC_CONFIG_START - 1;
             end
-          end else begin
-            // mem_addr <= 0;
           end
         end
         STATE_GET_DESC: begin
           if (ctl_tready_i) begin
-            // if (mem_addr != max_mem_addr) begin
             mem_addr <= mem_addr_nxt;
-            // end
           end
         end
       endcase
     end
   end
-
-  /*
-  always @(posedge clock) begin
-    if (reset) begin
-
-      // todo: faster with this air-gap !?
-
-    end else begin
-      if (state == STATE_IDLE) begin
-        if (ctl_xfer_req_i) begin
-          if (req_type == 3'b011) begin
-            mem_addr <= DESC_CONFIG_START;
-            max_mem_addr <= DESC_STRING_START - 1;
-          end else if (DESC_HAS_STRINGS && (req_type == 3'b101)) begin
-            if (ctl_xfer_value[7:0] == 8'h00) begin
-              mem_addr <= DESC_START0;
-              max_mem_addr <= DESC_START1 - 1;
-            end else if (ctl_xfer_value[7:0] == 8'h01) begin
-              mem_addr <= DESC_START1;
-              max_mem_addr <= DESC_START2 - 1;
-            end else if (ctl_xfer_value[7:0] == 8'h02) begin
-              mem_addr <= DESC_START2;
-              max_mem_addr <= DESC_START3 - 1;
-            end else if (ctl_xfer_value[7:0] == 8'h03) begin
-              mem_addr <= DESC_START3;
-              max_mem_addr <= DESC_SIZE - 1;
-            end
-          end else begin
-            mem_addr <= 0;
-            max_mem_addr <= DESC_CONFIG_START - 1;
-          end
-        end else begin
-          mem_addr <= 0;
-        end
-      end else if ((state == STATE_GET_DESC) && ctl_tready_i) begin
-        if (mem_addr != max_mem_addr) begin
-          mem_addr <= mem_addr + 1;
-        end
-      end
-    end
-  end
-*/
 
   always @(posedge clock) begin
     if (reset) begin
