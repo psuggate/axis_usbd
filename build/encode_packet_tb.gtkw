@@ -1,15 +1,15 @@
 [*]
 [*] GTKWave Analyzer v3.3.104 (w)1999-2020 BSI
-[*] Mon Nov 20 04:13:12 2023
+[*] Mon Nov 20 05:18:55 2023
 [*]
 [dumpfile] "./encode_packet_tb.vcd"
-[dumpfile_mtime] "Mon Nov 20 04:12:56 2023"
-[dumpfile_size] 13781
+[dumpfile_mtime] "Mon Nov 20 05:18:36 2023"
+[dumpfile_size] 15441
 [savefile] "./encode_packet_tb.gtkw"
 [timestart] 0
 [size] 1920 1043
 [pos] -1 -1
-*-16.076519 235000 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+*-16.334831 235000 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
 [treeopen] encode_packet_tb.
 [treeopen] encode_packet_tb.tx_usb_packet_inst.
 [sst_width] 233
@@ -110,10 +110,8 @@ encode_packet_tb.tx_usb_packet_inst.trn_tlast_i
 encode_packet_tb.tx_usb_packet_inst.trn_type_i[1:0]
 @22
 encode_packet_tb.tx_usb_packet_inst.trn_tdata_i[7:0]
-@29
-[color] 7
-encode_packet_tb.tx_usb_packet_inst.state[2:0]
 @28
+[color] 7
 encode_packet_tb.tx_usb_packet_inst.zero_q
 encode_packet_tb.tx_usb_packet_inst.xcrc_q
 @22

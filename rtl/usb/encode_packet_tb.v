@@ -71,11 +71,15 @@ reg [15:0] kdata;
 
     @(posedge clock);
     @(posedge clock);
-    send_packet(8'd10, 4'b0011);
+    send_packet(8'd5, 4'b0011, 1);
 
     @(posedge clock);
     @(posedge clock);
     handshake(2'b00);
+
+    @(posedge clock);
+    @(posedge clock);
+    send_packet(8'd5, 4'b0011, 0);
 
     #40 @(posedge clock);
     $finish;
@@ -125,7 +129,6 @@ assign usb_address = 7'h00;
   //  Core Under New Test
   ///
 
-`ifdef __potato_salad
   encode_packet tx_usb_packet_inst (
       .reset(reset),
       .clock(clock),
@@ -148,37 +151,9 @@ assign usb_address = 7'h00;
       .trn_type_i(ttype),
       .trn_tvalid_i(tvalid),
       .trn_tready_o(tready),
-      .trn_tlast_i(tlast & 1'b0),
-      .trn_tdata_i(tdata)
-  );
-`else
-  usb_encode tx_usb_packet_inst (
-      .reset(reset),
-      .clock(clock),
-
-      .tx_tvalid_o(svalid),
-      .tx_tready_i(sready),
-      .tx_tlast_o (slast),
-      .tx_tdata_o (sdata),
-
-      .hsk_send_i(hsend),
-      .hsk_done_o(hdone),
-      .hsk_type_i(htype),
-
-      .tok_send_i(ksend),
-      .tok_done_o(kdone),
-      .tok_type_i(ktype),
-      .tok_data_i(kdata),
-
-      .trn_start_i(tstart),
-      .trn_type_i(ttype),
-      .trn_tvalid_i(tvalid),
-      .trn_tready_o(tready),
       .trn_tlast_i(tlast),
-      // .trn_tlast_i(tlast & 1'b0),
       .trn_tdata_i(tdata)
   );
-`endif
 
 
   //
@@ -190,6 +165,7 @@ assign usb_address = 7'h00;
   task send_packet;
     input [7:0] len;
     input [3:0] pid;
+    input stub;
     begin
       integer count;
 
@@ -214,7 +190,7 @@ assign usb_address = 7'h00;
 
         if (tready) begin
           tvalid <= count > 0;
-          tlast <= count == 1;
+          tlast <= count == 1 && !stub;
           tdata <= $urandom;
 
           count <= count - 1;

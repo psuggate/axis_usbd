@@ -220,7 +220,7 @@ module usb_tlp #(
 
   // -- Encode/decode USB packets, over the AXI4 streams -- //
 
-  usb_encode tx_usb_packet_inst (
+  encode_packet tx_usb_packet_inst (
       .reset(usb_reset_int),
       .clock(ulpi_clk60),
 

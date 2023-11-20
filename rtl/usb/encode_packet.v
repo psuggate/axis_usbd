@@ -49,322 +49,239 @@ module encode_packet (
   input trn_tlast_i;
   input [7:0] trn_tdata_i;
 
-`include "usb_crc.vh"
+  `include "usb_crc.vh"
 
-  localparam [10:0]
-	ST_IDLE     = 11'h001,
-	ST_HSK      = 11'h002,
-	ST_HSK_WAIT = 11'h004,
-	ST_DPID     = 11'h008,
-	ST_DATA     = 11'h010,
-	ST_CRC1     = 11'h020,
-	ST_CRC2     = 11'h040,
-	ST_TOK1     = 11'h080,
-	ST_TOK2     = 11'h100,
-	ST_TOK3     = 11'h200,
-	ST_TOK4     = 11'h400;
+  function src_ready(input svalid, input tvalid, input dvalid, input dready);
+    src_ready = dready || !(tvalid || (dvalid && svalid));
+  endfunction
 
-  reg [10:0] state;
+  function tmp_valid(input svalid, input tvalid, input dvalid, input dready);
+    tmp_valid = !src_ready(svalid, tvalid, dvalid, dready);
+  endfunction
 
-  reg [15:0] tx_crc16;
-  wire [15:0] tx_crc16_nw;
-  reg zero_packet;
-  reg tvld, tlst, xrdy;
-  reg [7:0] tdat;
+  function dst_valid(input svalid, input tvalid, input dvalid, input dready);
+    dst_valid = tvalid || svalid || (dvalid && !dready);
+  endfunction
 
-  wire tx_ready;
+  function src_to_tmp(input src_ready, input dst_valid, input dst_ready);
+    src_to_tmp = src_ready && !dst_ready && dst_valid;
+  endfunction
+
+  function tmp_to_dst(input tmp_valid, input dst_ready);
+    tmp_to_dst = tmp_valid && dst_ready;
+  endfunction
+
+  function src_to_dst(input src_ready, input dst_valid, input dst_ready);
+    src_to_dst = src_ready && (dst_ready || !dst_valid);
+  endfunction
+
+  reg xvalid, tvalid, uready;
+  reg xlast, tlast;
+  reg [7:0] xdata, tdata;
+  wire tvalid_next, xvalid_next, uready_next;
+
+  reg [15:0] crc16_q;
+
+  reg xhsk_q, xtok_q, xdat_q, zero_q, xcrc_q;
+  reg hend_q, kend_q;
 
 
-  // -- Input/Output Assignments -- //
+  assign hsk_done_o   = hend_q;
+  assign tok_done_o   = kend_q;
 
-  assign hsk_done_o  = state == ST_HSK_WAIT;
-  assign tok_done_o  = state == ST_TOK4;
+  assign tx_tvalid_o  = tvalid;
+  assign tx_tlast_o   = tlast;
+  assign tx_tdata_o   = tdata;
 
-
-  // -- Internal Signals -- //
-
-  assign tx_crc16_nw = ~{tx_crc16[0], tx_crc16[1], tx_crc16[2], tx_crc16[3],
-                         tx_crc16[4], tx_crc16[5], tx_crc16[6], tx_crc16[7],
-                         tx_crc16[8], tx_crc16[9], tx_crc16[10], tx_crc16[11],
-                         tx_crc16[12], tx_crc16[13], tx_crc16[14], tx_crc16[15]
-                        };
+  assign trn_tready_o = uready;
 
 
   // -- Tx data CRC Calculation -- //
 
+  wire [15:0] crc16_nw;
+
+  assign crc16_nw = ~{crc16_q[0], crc16_q[1], crc16_q[2], crc16_q[3],
+                      crc16_q[4], crc16_q[5], crc16_q[6], crc16_q[7],
+                      crc16_q[8], crc16_q[9], crc16_q[10], crc16_q[11],
+                      crc16_q[12], crc16_q[13], crc16_q[14], crc16_q[15]
+                     };
+
   always @(posedge clock) begin
-    if (state == ST_IDLE) begin
-      tx_crc16 <= 16'hFFFF;
-    end else if (state == ST_DATA && tx_ready && trn_tvalid_i) begin
-    // end else if (state == ST_DATA && tx_tready_i && trn_tvalid_i) begin
-      tx_crc16 <= crc16(trn_tdata_i, tx_crc16);
+    if (!xdat_q) begin
+      crc16_q <= 16'hFFFF;
+    end else if (trn_tvalid_i && uready) begin
+      crc16_q <= crc16(trn_tdata_i, crc16_q);
     end
   end
 
 
-  // -- Tx FSM -- //
+  // -- ACKs for Handshakes and Tokens -- //
+
+  always @(posedge clock) begin
+    if (!hsk_send_i) begin
+      hend_q <= 1'b0;
+    end else if (xhsk_q && hsk_send_i && tx_tready_i) begin
+      hend_q <= 1'b1;
+    end else begin
+      hend_q <= hend_q;
+    end
+  end
+
+  always @(posedge clock) begin
+    if (!tok_send_i) begin
+      kend_q <= 1'b0;
+    end else if (xtok_q && tok_send_i && tlast && tx_tready_i) begin
+      kend_q <= 1'b1;
+    end else begin
+      kend_q <= kend_q;
+    end
+  end
+
+
+  // -- Skid-Register for AXI-S Transfers -- //
+
+  assign uready_next = src_ready(trn_tvalid_i, xvalid, tvalid, tx_tready_i);
+  assign xvalid_next = tmp_valid(trn_tvalid_i, xvalid, tvalid, tx_tready_i);
+  assign tvalid_next = dst_valid(trn_tvalid_i, xvalid, tvalid, tx_tready_i);
+
+  always @(posedge clock) begin
+    if (!trn_tvalid_i || trn_tvalid_i && trn_tlast_i && uready) begin
+      uready <= 1'b0;
+    end else if (xdat_q) begin
+      uready <= uready_next;
+    end else if (trn_start_i) begin
+      uready <= !trn_tlast_i;
+    end
+    xvalid <= xvalid_next;
+
+    if (src_to_tmp(uready, tvalid, tx_tready_i)) begin
+      xdata <= trn_tdata_i;
+      xlast <= trn_tlast_i;
+    end
+  end
+
+
+  // -- FSM -- //
+
+  wire [2:0] state = {xdat_q, xtok_q, xhsk_q};
 
   always @(posedge clock) begin
     if (reset) begin
-      state <= ST_IDLE;
-      zero_packet <= 1'bx;
+      {xdat_q, xtok_q, xhsk_q, zero_q, xcrc_q} <= 5'b00000;
+
+      tvalid <= 1'b0;
+      tlast <= 1'b0;
+      tdata <= 8'bx;
     end else begin
       case (state)
-        ST_IDLE: begin
-          if (hsk_send_i) begin
-            state <= ST_HSK;
-            zero_packet <= 1'bx;
-          end else if (tok_send_i) begin
-            state <= ST_TOK1;
-            zero_packet <= 1'bx;
-          end else if (trn_start_i) begin
-            state <= ST_DPID;
-            zero_packet <= trn_tlast_i && !trn_tvalid_i;
-          end else begin
-            state <= state;
-            zero_packet <= 1'bx;
-          end
-        end
-
-        ST_TOK1: state <= tx_ready ? ST_TOK2 : state; 
-        ST_TOK2: state <= tx_ready ? ST_TOK3 : state; 
-        ST_TOK3: state <= tx_ready ? ST_TOK4 : state; 
-        ST_TOK4: state <= !tok_send_i ? ST_IDLE : state; 
-
-        ST_HSK: begin
-          if (tx_ready) begin
-            state <= ST_HSK_WAIT;
-          end
-          zero_packet <= 1'bx;
-        end
-
-        ST_HSK_WAIT: begin
+        3'b001: begin
+          // Handshake packet
           if (!hsk_send_i) begin
-            state <= ST_IDLE;
+            xhsk_q <= 1'b0;
           end
-          zero_packet <= 1'bx;
+
+          if (tx_tready_i) begin
+            tvalid <= 1'b0;
+            tlast  <= 1'b0;
+          end
+
+          zero_q <= 1'bx;
+          xcrc_q <= 1'bx;
         end
 
-        ST_DPID: begin
-          if (tx_ready) begin
-            state <= zero_packet ? ST_CRC1 : ST_DATA;
-            zero_packet <= 1'bx;
-          end else begin
-            state <= state;
-            zero_packet <= zero_packet;
+        3'b010: begin
+          // Token packet
+          if (!tok_send_i) begin
+            xtok_q <= 1'b0;
           end
-        end
 
-        ST_DATA: begin
-          if (tx_ready && trn_tvalid_i) begin
-            if (trn_tlast_i) begin
-              state <= ST_CRC1;
+          if (tx_tready_i) begin
+            if (zero_q) begin
+              zero_q <= 1'b0;
+
+              tvalid <= 1'b1;
+              tlast  <= 1'b0;
+              tdata  <= tok_data_i[7:0];
+            end else if (tlast) begin
+              tvalid <= 1'b0;
+              tlast  <= 1'b0;
+              tdata  <= 8'bx;
+            end else begin
+              tvalid <= 1'b1;
+              tlast  <= 1'b1;
+              tdata  <= tok_data_i[15:8];
             end
-          end else if (!trn_tvalid_i) begin
-            state <= ST_CRC2;
-            // state <= ST_CRC1;
           end
-          zero_packet <= 1'bx;
         end
 
-        ST_CRC1: begin
-          if (tx_ready) begin
-            state <= ST_CRC2;
-          end
-          zero_packet <= 1'bx;
-        end
+        3'b100: begin
+          if (xcrc_q && tx_tready_i) begin
+            // Sending 2nd byte of CRC16
+            if (tlast) begin
+              {xdat_q, xcrc_q} <= 2'b00;
 
-        ST_CRC2: begin
-          if (tx_ready) begin
-            state <= ST_IDLE;
+              tvalid <= 1'b0;
+              tlast <= 1'b0;
+              tdata <= 8'bx;
+            end else begin
+              tvalid <= 1'b1;
+              tlast  <= 1'b1;
+              tdata  <= crc16_nw[15:8];
+            end
+          end else if (tx_tready_i && (zero_q || !trn_tvalid_i)) begin
+            // Sending 1st byte of CRC16
+            {zero_q, xcrc_q} <= 2'b01;
+
+            tvalid <= 1'b1;
+            tlast <= 1'b0;
+            tdata <= crc16_nw[7:0];
+          end else begin
+            // Transfer data from source to destination
+            tvalid <= tvalid_next;
+
+            if (src_to_dst(uready, tvalid, tx_tready_i)) begin
+              tdata  <= trn_tdata_i;
+              zero_q <= trn_tlast_i;
+            end else if (tmp_to_dst(xvalid, tx_tready_i)) begin
+              tdata  <= xdata;
+              zero_q <= xlast;
+            end
           end
-          zero_packet <= 1'bx;
         end
 
         default: begin
-          state <= ST_IDLE;
-          zero_packet <= 1'bx;
+          if (hsk_send_i) begin
+            {xdat_q, xtok_q, xhsk_q} <= 3'b001;
+
+            tvalid <= 1'b1;
+            tlast <= 1'b1;
+            tdata <= {~{hsk_type_i, 2'b10}, hsk_type_i, 2'b10};
+          end else if (tok_send_i) begin
+            {xdat_q, xtok_q, xhsk_q} <= 5'b010;
+            zero_q <= 1'b1;
+
+            tvalid <= 1'b1;
+            tlast <= 1'b0;
+            tdata <= {~{tok_type_i, 2'b01}, {tok_type_i, 2'b01}};
+          end else if (trn_start_i) begin
+            {xdat_q, xtok_q, xhsk_q} <= 3'b100;
+            zero_q <= trn_tlast_i;  // PID-only packet ??
+
+            tvalid <= 1'b1;
+            tlast <= 1'b0;
+            tdata <= {~{trn_type_i, 2'b11}, {trn_type_i, 2'b11}};
+          end else begin
+            {xdat_q, xtok_q, xhsk_q} <= 3'b000;
+            {zero_q, xcrc_q} <= 2'b00;
+
+            tvalid <= 1'b0;
+            tlast <= 1'b0;
+            tdata <= 8'bx;
+          end
         end
       endcase
     end
   end
-
-
-  // -- Tx Data-path -- //
-
-`define __upstream_flow_control_works
-`ifdef __upstream_flow_control_works
-  /**
-   * TODO:
-   *  - I think that there are upstream data-path problems ??
-   *  - Specifically, I don't think the upstream flow-control works correctly !?
-   */
-  reg tx_cycle_q;
-
-  assign trn_tready_o = xrdy;
-  assign tx_ready = !tvld || tvld && tx_tready_i;
-  // assign trn_tready_o = !tvld || tvld && tx_tready_i;
-  // assign tx_ready = tx_tready_i;
-  // assign tx_ready = xrdy;
-
-  assign tx_tvalid_o = tvld;
-  assign tx_tlast_o  = tlst;
-  assign tx_tdata_o  = tdat;
-
-  always @(posedge clock) begin
-    case (state)
-      ST_IDLE: tx_cycle_q <= trn_start_i & ~hsk_send_i;
-      default: begin
-        if (tx_cycle_q && tvld && tlst && tx_tready_i) begin
-          tx_cycle_q <= 1'b0;
-        end
-      end
-    endcase
-  end
-
-  always @(posedge clock) begin
-    if (tx_cycle_q) begin
-      xrdy <= !tvld || tvld && tx_tready_i;
-    end else begin
-      xrdy <= 1'b0;
-    end
-  end
-
-  always @(posedge clock) begin
-    case (state)
-      ST_IDLE: begin
-        if (hsk_send_i) begin
-          tvld <= 1'b1;
-          tlst <= 1'b1;
-          tdat <= {(~{hsk_type_i, 2'b10}), hsk_type_i, 2'b10};
-        end else if (trn_start_i) begin
-          tvld <= 1'b1;
-          tlst <= 1'b0;
-          tdat <= {(~{trn_type_i, 2'b11}), {trn_type_i, 2'b11}};
-        end else begin
-          tvld <= 1'b0;
-          tlst <= 1'b0;
-          tdat <= 'bx;
-        end
-      end
-
-      ST_HSK: begin
-        if (tx_tready_i) begin
-          tvld <= 1'b0;
-          tlst <= 1'b0;
-          tdat <= 'bx;
-        end
-      end
-
-      ST_DPID: begin
-        tvld <= 1'b1;
-        tlst <= 1'b0;
-        if (tx_tready_i) begin
-          tdat <= zero_packet || !trn_tvalid_i ? tx_crc16_nw[7:0] : trn_tdata_i;
-        end
-      end
-
-      ST_DATA: begin
-        tvld <= 1'b1;
-        tlst <= 1'b0;
-        if (tx_tready_i) begin
-          tdat <= trn_tvalid_i && !trn_tlast_i ? trn_tdata_i : tx_crc16_nw[7:0];
-        end else begin
-          tdat <= tdat;
-        end
-      end
-
-      ST_CRC1: begin
-        if (tx_tready_i) begin
-          tvld <= 1'b1;
-          tlst <= 1'b1;
-          tdat <= tx_crc16_nw[15:8];
-        end
-      end
-
-      ST_CRC2: begin
-        if (tx_tready_i) begin
-          tvld <= 1'b0;
-          tlst <= 1'b0;
-          tdat <= 'bx;
-        end
-      end
-
-      default: begin
-        tvld <= 1'b0;
-        tlst <= 1'b0;
-        tdat <= 'bx;
-      end
-    endcase
-  end
-
-`else
-
-  wire trdy_w;
-
-  // assign trn_tready_o = state == ST_DATA & tx_tready_i;
-  // assign tx_ready = tx_tready_i;
-  assign trn_tready_o = state == ST_DATA & trdy_w;
-  assign tx_ready = trdy_w;
-
-  // todo: clean-up this disaster site !?
-  always @(*) begin
-    if (state == ST_DPID) begin
-      tdat = {(~{trn_type_i, 2'b11}), {trn_type_i, 2'b11}};
-    end else if (state == ST_HSK) begin
-      tdat = {(~{hsk_type_i, 2'b10}), hsk_type_i, 2'b10};
-    end else if (state == ST_CRC1 || state == ST_DATA && !trn_tvalid_i) begin
-      tdat = tx_crc16_nw[7:0];
-    end else if (state == ST_CRC2) begin
-      tdat = tx_crc16_nw[15:8];
-    end else if (state == ST_TOK1) begin
-      tdat = {~{tok_type_i, 2'b01}, {tok_type_i, 2'b01}};
-    end else if (state == ST_TOK2) begin
-      tdat = tok_data_i[7:0];
-    end else if (state == ST_TOK3) begin
-      tdat = tok_data_i[15:8];
-    end else begin
-      tdat = trn_tdata_i;
-    end
-
-    if (state == ST_DPID || state == ST_HSK ||
-        state == ST_CRC1 || state == ST_CRC2 ||
-        state == ST_TOK1 || state == ST_TOK2 || state == ST_TOK3 ||
-        state == ST_DATA) begin
-      tvld = 1'b1;
-    end else begin
-      tvld = 1'b0;
-    end
-
-    if (state == ST_HSK || state == ST_CRC2 || state == ST_TOK3) begin
-      tlst = 1'b1;
-    end else begin
-      tlst = 1'b0;
-    end
-  end
-
-  // todo: instantiating this ('BYPASS(1)') causes the same types of failure as
-  //   the alternative implementation in the 'ifdef' block above -- this skid-
-  //   register works, so does this mean that there is a problem upstream !?
-  axis_skid #(
-      .WIDTH (8),
-      .BYPASS(0)
-  ) axis_skid_inst (
-      .clock(clock),
-      .reset(reset),
-
-      .s_tvalid(tvld),
-      .s_tready(trdy_w),
-      .s_tlast (tlst),
-      .s_tdata (tdat),
-
-      .m_tvalid(tx_tvalid_o),
-      .m_tready(tx_tready_i),
-      .m_tlast (tx_tlast_o),
-      .m_tdata (tx_tdata_o)
-  );
-
-`endif
 
 
 endmodule  // encode_packet
