@@ -152,7 +152,6 @@ module usb_tlp #(
   wire [7:0] ctl_xfer_data_in_std;
 
   wire [7:0] current_configuration;
-  wire usb_reset_int;
   wire usb_crc_error_int;
   reg cfg_request_q;
   wire cfg_request, cfg_request_w;
@@ -163,7 +162,6 @@ module usb_tlp #(
 
 
   assign usb_clock                  = ulpi_clk60;
-  assign usb_reset                  = usb_reset_int;
 
   assign usb_crc_error              = usb_crc_error_int;
 

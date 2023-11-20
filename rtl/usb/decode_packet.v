@@ -4,9 +4,7 @@
 // License: MIT
 //  Copyright (c) 2021 Dmitry Matyunin
 //
-module decode_packet #(
-    parameter SINGLE_TRANSACTION_TYPE_REGISTER = 1
-) (
+module decode_packet (
     input wire reset,
     input wire clock,
 
@@ -73,11 +71,11 @@ module decode_packet #(
   // Rx data-path (from USB host) to either USB config OR bulk EP cores
   assign rx_trn_valid_o = rx_trn_valid_q;
   assign rx_trn_end_o   = rx_trn_end_q;
-  assign rx_trn_type_o  = SINGLE_TRANSACTION_TYPE_REGISTER ? trn_type_q : rx_trn_type_q;
+  assign rx_trn_type_o  = trn_type_q;
   assign rx_trn_data_o  = rx_buf1;
 
   assign trn_hsk_recv_o = rx_trn_hsk_recv_q;
-  assign trn_hsk_type_o = SINGLE_TRANSACTION_TYPE_REGISTER ? trn_type_q : rx_trn_hsk_type_q;
+  assign trn_hsk_type_o = trn_type_q;
 
   assign trn_start_o    = trn_start_q;
   assign trn_type_o     = trn_type_q;
@@ -237,46 +235,15 @@ module decode_packet #(
   end
 
 
-// -- Transaction Type Register -- //
+  // -- Transaction Type Register -- //
 
   // todo: combine into just one register !?
   always @(posedge clock) begin
     if (rx_tvalid_i && state == ST_IDLE && rx_pid_pw == rx_pid_nw) begin
       trn_type_q <= rx_pid_pw[3:2];
-      rx_trn_type_q <= rx_pid_pw[3:2];
-      rx_trn_hsk_type_q <= rx_pid_pw[3:2];
       rx_trn_hsk_recv_q <= rx_pid_pw[1:0] == 2'b10 && addr_match_w;
     end else begin
-      trn_type_q <= trn_type_q;
       rx_trn_hsk_recv_q <= 1'b0;
-      /*
-      case (rx_pid_pw[1:0])
-        2'b01: begin
-          trn_type_q <= rx_pid_pw[3:2];
-          rx_trn_type_q <= rx_trn_type_q;
-          rx_trn_hsk_recv_q <= 1'b0;
-          rx_trn_hsk_type_q <= rx_trn_hsk_type_q;
-        end
-        2'b10: begin
-          trn_type_q <= trn_type_q;
-          rx_trn_type_q <= rx_trn_type_q;
-          rx_trn_hsk_type_q <= rx_pid_pw[3:2];
-          rx_trn_hsk_recv_q <= addr_match_w;
-        end
-        2'b11: begin
-          trn_type_q <= trn_type_q;
-          rx_trn_type_q <= rx_pid_pw[3:2];
-          rx_trn_hsk_recv_q <= 1'b0;
-          rx_trn_hsk_type_q <= rx_trn_hsk_type_q;
-        end
-        default: begin
-          trn_type_q <= trn_type_q;
-          rx_trn_type_q <= rx_trn_type_q;
-          rx_trn_hsk_recv_q <= 1'b0;
-          rx_trn_hsk_type_q <= rx_trn_hsk_type_q;
-        end
-      endcase
-      */
     end
   end
 

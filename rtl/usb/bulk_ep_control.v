@@ -21,9 +21,11 @@ module bulk_ep_control #(
     input wire [15:0] ctl_xfer_length,
     output wire ctl_xfer_accept,
     input wire ctl_xfer,
+
     output wire ctl_xfer_done,
     input wire [7:0] ctl_xfer_data_out,
     input wire ctl_xfer_data_out_valid,
+
     output wire [7:0] ctl_xfer_data_in,
     output wire ctl_xfer_data_in_valid,
     output wire ctl_xfer_data_in_last,
