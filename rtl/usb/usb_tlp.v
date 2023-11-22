@@ -104,10 +104,11 @@ module usb_tlp #(
   wire [7:0] axis_tx_tdata;
   wire usb_vbus_valid;
 
-  wire [1:0] trn_type;
-  wire [6:0] trn_address;
-  wire [3:0] trn_endpoint;
-  wire trn_start;
+  // USB has Rx'd a packet when 'usb_rx_trn_start' asserts
+  wire [1:0] usb_rx_trn_type;
+  wire [6:0] usb_rx_trn_address;
+  wire [3:0] usb_rx_trn_endpoint;
+  wire usb_rx_trn_start;
 
   wire [1:0] rx_trn_data_type;
   wire rx_trn_end;
@@ -263,10 +264,10 @@ module usb_tlp #(
       .rx_tlast_i (axis_rx_tlast),
       .rx_tdata_i (axis_rx_tdata),
 
-      .trn_start_o(trn_start),
-      .trn_type_o(trn_type),
-      .trn_address_o(trn_address),
-      .trn_endpoint_o(trn_endpoint),
+      .trn_start_o(usb_rx_trn_start),
+      .trn_type_o(usb_rx_trn_type),
+      .trn_address_o(usb_rx_trn_address),
+      .trn_endpoint_o(usb_rx_trn_endpoint),
       .usb_address_i(device_address),
 
       .usb_sof_o(usb_sof),
@@ -287,13 +288,13 @@ module usb_tlp #(
   usb_xfer #(
       .HIGH_SPEED(HIGH_SPEED)
   ) usb_xfer_inst (
-      .rst(usb_reset),
-      .clk(usb_clock),
+      .reset(usb_reset),
+      .clock(usb_clock),
 
-      .trn_type(trn_type),
-      .trn_address(trn_address),
-      .trn_endpoint(trn_endpoint),
-      .trn_start(trn_start),
+      .trn_start_i(usb_rx_trn_start),
+      .trn_type_i(usb_rx_trn_type),
+      .trn_address_i(usb_rx_trn_address),
+      .trn_endpoint_i(usb_rx_trn_endpoint),
 
       .rx_trn_data_type(rx_trn_data_type),
       .rx_trn_end(rx_trn_end),

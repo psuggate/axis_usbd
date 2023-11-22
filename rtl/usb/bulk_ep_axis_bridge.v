@@ -217,8 +217,8 @@ module bulk_ep_axis_bridge #(
       .PACKET_MODE(PACKET_MODE),
       .CONFIG_CHAN(CONFIG_CHAN)
   ) bulk_ep_control_inst (
-      .clk(usb_clk),
-      .rst(usb_reset),
+      .clock(usb_clk),
+      .reset(usb_reset),
       .ctl_xfer_endpoint(ctl_xfer_endpoint),
       .ctl_xfer_type(ctl_xfer_type),
       .ctl_xfer_request(ctl_xfer_request),
@@ -246,10 +246,12 @@ module bulk_ep_axis_bridge #(
       .ep_blk_xfer_in_data_valid(ep_blk_xfer_in_data_valid),
       .ep_blk_xfer_in_data_ready(ep_blk_xfer_in_data_ready),
       .ep_blk_xfer_in_data_last(ep_blk_xfer_in_data_last),
+
       .tlp_blk_out_xfer(tlp_blk_out_xfer),
       .tlp_blk_xfer_out_ready_read(tlp_blk_xfer_out_ready_read),
       .tlp_blk_xfer_out_data(tlp_blk_xfer_out_data),
       .tlp_blk_xfer_out_data_valid(tlp_blk_xfer_out_data_valid),
+
       .ep_blk_out_xfer(ep_blk_out_xfer),
       .ep_blk_xfer_out_ready_read(ep_blk_xfer_out_ready_read),
       .ep_blk_xfer_out_data(ep_blk_xfer_out_data),

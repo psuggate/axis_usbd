@@ -7,14 +7,16 @@
 module usb_xfer #(
     parameter integer HIGH_SPEED = 1
 ) (
-    input wire clk,
-    input wire rst,
+    input wire clock,
+    input wire reset,
 
-    /* Transaction */
-    input wire [1:0] trn_type,
-    input wire [6:0] trn_address,
-    input wire [3:0] trn_endpoint,
-    input wire trn_start,
+    input wire crc_error, // todo: not connected/used !?
+
+    /* USB Rx Transaction */
+    input wire trn_start_i,
+    input wire [1:0] trn_type_i,
+    input wire [6:0] trn_address_i, // todo: not connected/used !?
+    input wire [3:0] trn_endpoint_i,
 
     /* DATA0/1/2 MDATA */
     input wire [1:0] rx_trn_data_type,
@@ -33,10 +35,10 @@ module usb_xfer #(
     output wire tx_trn_data_valid,
     input wire tx_trn_data_ready,
     output wire tx_trn_data_last,
-    input wire crc_error,
 
     /* Ctl */
     output wire ctl_xfer_o,  /* '1' when processing control transfer */
+    input wire ctl_xfer_accept_i,
     input wire ctl_xfer_done_i,  /* '1' when control request completed */
     output wire [3:0] ctl_xfer_endpoint_o,
     output wire [7:0] ctl_xfer_type_o,
@@ -44,7 +46,6 @@ module usb_xfer #(
     output wire [15:0] ctl_xfer_value_o,
     output wire [15:0] ctl_xfer_index_o,
     output wire [15:0] ctl_xfer_length_o,
-    input wire ctl_xfer_accept_i,
 
     output wire [7:0] ctl_xfer_data_out,
     output wire ctl_xfer_data_out_valid,
@@ -154,8 +155,11 @@ module usb_xfer #(
   assign tx_trn_data = state == STATE_CONTROL_DATAIN ? ctl_tdata_i : bid_tdata_i;
 
 
-  /* Rx Counter */
-  always @(posedge clk) begin
+  // -- Rx Counter -- //
+
+  // Todo: is the chopping robust; e.g., does AXI-S flow-control occasionally
+  //   cause problems ?!
+  always @(posedge clock) begin
     if (state == STATE_IDLE || state == STATE_CONTROL_SETUP_ACK) begin
       rx_counter <= 0;
     end else if (rx_trn_valid) begin
@@ -163,9 +167,14 @@ module usb_xfer #(
     end
   end
 
-  /* Toggling */
-  always @(posedge clk) begin
-    if (rst) begin
+
+  // -- Toggling between Tx & Rx -- //
+
+  // Todo: 
+  //  - what happens if this gets out-of-sync; e.g., due to a send-failure !?
+  //  - currently, only 1x EP is supported, so this is mostly useless !!
+  always @(posedge clock) begin
+    if (reset) begin
       data_types <= 16'b1;
     end else begin
       if (state == STATE_CONTROL_SETUP_ACK) begin
@@ -186,9 +195,11 @@ module usb_xfer #(
     end
   end
 
-  /* FSM */
-  always @(posedge clk) begin
-    if (rst) begin
+
+  // -- FSM for Tx & Rx types & directions -- //
+
+  always @(posedge clock) begin
+    if (reset) begin
       state <= STATE_IDLE;
       ctl_xfer_int <= 1'b0;
     end else begin
@@ -197,12 +208,12 @@ module usb_xfer #(
           ctl_xfer_int <= 1'b0;
           blk_in_xfer_int <= 1'b0;
           blk_out_xfer_int <= 1'b0;
-          if (trn_start) begin
-            if (trn_type == 2'b11) begin
+          if (trn_start_i) begin
+            if (trn_type_i == 2'b11) begin
               state <= STATE_CONTROL_SETUP;
-              current_endpoint <= trn_endpoint;
-            end else if (trn_type == 2'b10) begin
-              current_endpoint <= trn_endpoint;
+              current_endpoint <= trn_endpoint_i;
+            end else if (trn_type_i == 2'b10) begin
+              current_endpoint <= trn_endpoint_i;
               if (bid_has_data_i) begin
                 blk_in_xfer_int <= 1'b1;
                 tx_trn_data_start_int <= 1'b1;
@@ -212,9 +223,9 @@ module usb_xfer #(
                 ctl_status <= HSK_NAK;
                 state <= STATE_BULK_IN_MYACK;
               end
-            end else if (trn_type == 2'b00) begin
+            end else if (trn_type_i == 2'b00) begin
               blk_out_xfer_int <= 1'b1;
-              current_endpoint <= trn_endpoint;
+              current_endpoint <= trn_endpoint_i;
               if (blk_xfer_out_ready_read) begin
                 ctl_status <= HSK_ACK;
               end else begin
@@ -267,7 +278,7 @@ module usb_xfer #(
         end
 
         STATE_CONTROL_WAIT_DATAIN: begin
-          if (trn_start && trn_type == 2'b10) begin
+          if (trn_start_i && trn_type_i == 2'b10) begin
             if (ctl_xfer_accept_i) begin
               state <= STATE_CONTROL_DATAIN;
             end else begin
@@ -278,7 +289,7 @@ module usb_xfer #(
         end
 
         STATE_CONTROL_WAIT_DATAOUT: begin
-          if (trn_start && trn_type == 2'b00) begin
+          if (trn_start_i && trn_type_i == 2'b00) begin
             if (ctl_xfer_accept_i) begin
               ctl_status <= HSK_ACK;
             end else begin
@@ -341,7 +352,7 @@ module usb_xfer #(
         end
 
         STATE_CONTROL_STATUS_OUT: begin
-          if (trn_start && trn_type == 2'b00) begin
+          if (trn_start_i && trn_type_i == 2'b00) begin
             state <= STATE_CONTROL_STATUS_OUT_D;
           end
         end
@@ -368,7 +379,7 @@ module usb_xfer #(
         end
 
         STATE_CONTROL_STATUS_IN: begin
-          if (trn_start && trn_type == 2'b10) begin
+          if (trn_start_i && trn_type_i == 2'b10) begin
             if (ctl_xfer_done_i) begin
               tx_trn_data_start_int <= 1'b1;
               state <= STATE_CONTROL_STATUS_IN_D;
