@@ -1,7 +1,14 @@
 # axis_usbd
+
 AXI-Stream USB 2.0 HS Device Bridge (Verilog). 
 
 This project based on [USBCore](https://github.com/ObKo/USBCore) project by ObKo. It was rewritten to Verilog, modified and fixed some bugs. Now, It works correctly with USB-hubs and so on.
+
+## TODO
+
+- Chop-up packets in only only module (currently perfomed in both `bulp_ep_control` and `usb_xfer`
+
+- Better (streaming) chopper, with smaller packet-lengths, and a `tlast` signal, like that of AXI-Stream
 
 ## Parameters
 * FPGA_VENDOR        - FPGA Vendor (default: "xilinx")

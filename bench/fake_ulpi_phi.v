@@ -41,7 +41,7 @@ always @(posedge clock) begin
       // De-assert data drivers
       dir_q <= 1'b0;
       nxt_q <= 1'b0;
-    else if (!dir_q && stp_w) begin
+    end else if (!dir_q && stp_w) begin
       // Bus turnaround, send an 'RX CMD' ??
       dir_q <= 1'b1;
       nxt_q <= 1'b0;

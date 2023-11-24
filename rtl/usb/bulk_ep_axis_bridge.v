@@ -219,6 +219,9 @@ module bulk_ep_axis_bridge #(
   ) bulk_ep_control_inst (
       .clock(usb_clk),
       .reset(usb_reset),
+
+      // Control PIPE for the EP
+      // todo: this PIPE is optional !?
       .ctl_xfer_endpoint(ctl_xfer_endpoint),
       .ctl_xfer_type(ctl_xfer_type),
       .ctl_xfer_request(ctl_xfer_request),
@@ -234,12 +237,16 @@ module bulk_ep_axis_bridge #(
       .ctl_xfer_data_in_valid(ctl_xfer_data_in_valid),
       .ctl_xfer_data_in_last(ctl_xfer_data_in_last),
       .ctl_xfer_data_in_ready(ctl_xfer_data_in_ready),
+
+      // Stream: EP IN -> TLP
+      // todo: can this EP IN PIPE bypass this module !?
       .tlp_blk_in_xfer(tlp_blk_in_xfer),
       .tlp_blk_xfer_in_has_data(tlp_blk_xfer_in_has_data),
       .tlp_blk_xfer_in_data(tlp_blk_xfer_in_data),
       .tlp_blk_xfer_in_data_valid(tlp_blk_xfer_in_data_valid),
       .tlp_blk_xfer_in_data_ready(tlp_blk_xfer_in_data_ready),
       .tlp_blk_xfer_in_data_last(tlp_blk_xfer_in_data_last),
+
       .ep_blk_in_xfer(ep_blk_in_xfer),
       .ep_blk_xfer_in_has_data(ep_blk_xfer_in_has_data),
       .ep_blk_xfer_in_data(ep_blk_xfer_in_data),
@@ -247,6 +254,8 @@ module bulk_ep_axis_bridge #(
       .ep_blk_xfer_in_data_ready(ep_blk_xfer_in_data_ready),
       .ep_blk_xfer_in_data_last(ep_blk_xfer_in_data_last),
 
+      // Stream: TLP -> EP OUT
+      // todo: can this EP OUT PIPE bypass this module !?
       .tlp_blk_out_xfer(tlp_blk_out_xfer),
       .tlp_blk_xfer_out_ready_read(tlp_blk_xfer_out_ready_read),
       .tlp_blk_xfer_out_data(tlp_blk_xfer_out_data),
@@ -305,5 +314,6 @@ module bulk_ep_axis_bridge #(
       .axis_tlast_o (m_axis_tlast),
       .axis_tdata_o (m_axis_tdata)
   );
+
 
 endmodule  // bulk_ep_axis_bridge
