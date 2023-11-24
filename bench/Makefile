@@ -5,7 +5,7 @@ all:	build
 #  Icarus Verilog settings
 ##
 IVC	?= iverilog
-OPT	:= -g2005-sv -D__icarus -Wall
+OPT	:= -g2005-sv -D__icarus -Wall -I../rtl/usb/
 
 RTL	:= ../rtl
 ARCH	= $(wildcard $(RTL)/arch/*.v)
