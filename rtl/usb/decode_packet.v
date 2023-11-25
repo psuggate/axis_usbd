@@ -51,11 +51,11 @@ module decode_packet (
   wire [15:0] rx_data_crc_w;
   wire [4:0] rx_crc5_w;
   wire [3:0] rx_pid_pw, rx_pid_nw;
-  wire [15:0] crc16_nw;
+wire [15:0] crc16_w;
   reg [15:0] crc16_q;
 
   reg sof_flag, crc_err_flag;
-  reg trn_start_q, rx_trn_end_q, rx_trn_hsk_recv_q;
+  reg trn_start_q, trn_frame_q, rx_trn_end_q, rx_trn_hsk_recv_q;
   reg [1:0] trn_type_q, rx_trn_type_q, rx_trn_hsk_type_q;
 
   reg rx_vld0, rx_vld1, rx_valid_q, rx_trn_valid_q;
@@ -121,17 +121,13 @@ module decode_packet (
 
   // -- Rx Data CRC Calculation -- //
 
-  assign crc16_nw = ~{crc16_q[0], crc16_q[1], crc16_q[2], crc16_q[3],
-                      crc16_q[4], crc16_q[5], crc16_q[6], crc16_q[7],
-                      crc16_q[8], crc16_q[9], crc16_q[10], crc16_q[11],
-                      crc16_q[12], crc16_q[13], crc16_q[14], crc16_q[15]
-                     };
+assign crc16_w = crc16(rx_buf0, crc16_q);
 
   always @(posedge clock) begin
-    if (!rx_vld1) begin
+    if (!rx_vld0) begin
       crc16_q <= 16'hffff;
     end else begin
-      crc16_q <= crc16(rx_buf1, crc16_q);
+      crc16_q <= crc16_w;
     end
   end
 
@@ -145,13 +141,15 @@ module decode_packet (
     endcase
   end
 
-  always @(posedge clock) begin
-    case (state)
-      ST_SOF_CRC, ST_TOKEN_CRC: crc_err_flag <= token_crc5 != rx_crc5_w;
-      ST_DATA_CRC: crc_err_flag <= rx_data_crc_w != crc16_nw;
-      default: crc_err_flag <= 1'b0;
-    endcase
+always @(posedge clock) begin
+  if (reset) begin
+    crc_err_flag <= 1'b0;
+  end else if (state == ST_SOF_CRC || state == ST_TOKEN_CRC) begin
+    crc_err_flag <= token_crc5 != rx_crc5_w;
+  end else if (state == ST_DATA_CRC) begin
+    crc_err_flag <= crc16_w != 16'h800d;
   end
+end
 
   // Strobes that indicate the start and end of a (received) packet.
   always @(posedge clock) begin

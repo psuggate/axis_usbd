@@ -210,9 +210,11 @@ module usb_xfer #(
           blk_out_xfer_int <= 1'b0;
           if (trn_start_i) begin
             if (trn_type_i == 2'b11) begin
+              // 2'b11 == SETUP token packet
               state <= STATE_CONTROL_SETUP;
               current_endpoint <= trn_endpoint_i;
             end else if (trn_type_i == 2'b10) begin
+              // 2'b10 == IN token packet
               current_endpoint <= trn_endpoint_i;
               if (bid_has_data_i) begin
                 blk_in_xfer_int <= 1'b1;
@@ -220,10 +222,13 @@ module usb_xfer #(
                 tx_counter <= 0;
                 state <= STATE_BULK_IN;
               end else begin
+                // No data available
+                // todo: NAK or zero-data packet ??
                 ctl_status <= HSK_NAK;
                 state <= STATE_BULK_IN_MYACK;
               end
             end else if (trn_type_i == 2'b00) begin
+              // 2'b00 == OUT token packet
               blk_out_xfer_int <= 1'b1;
               current_endpoint <= trn_endpoint_i;
               if (blk_xfer_out_ready_read) begin

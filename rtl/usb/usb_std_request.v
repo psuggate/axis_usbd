@@ -175,7 +175,6 @@ module usb_std_request #(
 	STATE_SET_ADDR = 3'd4;
 
   reg [2:0] state;
-  reg [$clog2(DESC_SIZE)-1:0] mem_addr;
 
   /**
    * Request types:
@@ -197,7 +196,8 @@ module usb_std_request #(
   wire handle_req;
 
   reg tlast, gnt_q;
-  wire [7:0] mem_addr_nxt = mem_addr + 1;
+  reg [$clog2(DESC_SIZE)-1:0] mem_addr;
+  wire [$clog2(DESC_SIZE)-1:0] mem_addr_nxt = mem_addr + 1;
 
 
   // -- Signal Output Assignments -- //
@@ -278,6 +278,7 @@ module usb_std_request #(
         default: begin
           if (ctl_xfer_req_i) begin
             if ((req_type == 3'b001) || (req_type == 3'b011) || (req_type == 3'b101)) begin
+            // if (req_type[0]) begin
               state <= STATE_GET_DESC;
             end else if (req_type == 3'b010) begin
               state <= STATE_SET_ADDR;
