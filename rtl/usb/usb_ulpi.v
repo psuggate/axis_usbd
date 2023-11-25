@@ -198,13 +198,13 @@ module usb_ulpi #(
     if (dir_q || ulpi_dir) begin
       buf_valid <= 1'b0;
       buf_last  <= 1'bx;
-      buf_data  <= 8'bx;
+      buf_data  <= 8'hxx;
 
       tx_ready  <= 1'b0;
     end else begin
       case (state)
         STATE_IDLE: begin
-          buf_data  <= 8'bx;
+          buf_data  <= 8'hxx;
           buf_last  <= 1'bx;
           buf_valid <= 1'b0;
 
@@ -241,7 +241,7 @@ module usb_ulpi #(
         default: begin
           buf_valid <= 1'b0;
           buf_last  <= 1'bx;
-          buf_data  <= 8'bx;
+          buf_data  <= 8'hxx;
 
           tx_ready  <= 1'b0;
         end

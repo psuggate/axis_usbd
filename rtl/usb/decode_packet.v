@@ -24,14 +24,14 @@ module decode_packet (
 
     output wire rx_trn_valid_o,
     output wire rx_trn_end_o,
-    output wire [1:0] rx_trn_type_o, /* DATA0/1/2 MDATA */
+    output wire [1:0] rx_trn_type_o,  /* DATA0/1/2 MDATA */
     output wire [7:0] rx_trn_data_o,
 
     output wire trn_hsk_recv_o,
-    output wire [1:0] trn_hsk_type_o /* 00 - ACK, 10 - NAK, 11 - STALL, 01 - NYET */
+    output wire [1:0] trn_hsk_type_o  /* 00 - ACK, 10 - NAK, 11 - STALL, 01 - NYET */
 );
 
-`include "usb_crc.vh"
+  `include "usb_crc.vh"
 
   localparam  [6:0]
 	ST_IDLE      = 7'h01,
@@ -42,17 +42,17 @@ module decode_packet (
 	ST_DATA      = 7'h20,
 	ST_DATA_CRC  = 7'h40;
 
-  reg [6:0] state;
+  reg [ 6:0] state;
 
   reg [10:0] token_data;
-  reg [4:0] token_crc5;
+  reg [ 4:0] token_crc5;
   reg [7:0] rx_buf1, rx_buf0;
   wire addr_match_w;
   wire [15:0] rx_data_crc_w;
   wire [4:0] rx_crc5_w;
   wire [3:0] rx_pid_pw, rx_pid_nw;
-wire [15:0] crc16_w;
-  reg [15:0] crc16_q;
+  wire [15:0] crc16_w;
+  reg  [15:0] crc16_q;
 
   reg sof_flag, crc_err_flag;
   reg trn_start_q, trn_frame_q, rx_trn_end_q, rx_trn_hsk_recv_q;
@@ -63,10 +63,10 @@ wire [15:0] crc16_w;
 
   // -- Input/Output Assignments -- //
 
-  assign usb_sof_o = sof_flag;
-  assign crc_err_o = crc_err_flag;
+  assign usb_sof_o      = sof_flag;
+  assign crc_err_o      = crc_err_flag;
 
-  assign rx_tready_o = 1'b1; // todo: can this fail ??
+  assign rx_tready_o    = 1'b1;  // todo: can this fail ??
 
   // Rx data-path (from USB host) to either USB config OR bulk EP cores
   assign rx_trn_valid_o = rx_trn_valid_q;
@@ -85,11 +85,11 @@ wire [15:0] crc16_w;
 
   // -- Internal Signals -- //
 
-  assign rx_pid_pw     = rx_tdata_i[3:0];
-  assign rx_pid_nw     = ~rx_tdata_i[7:4];
-  assign rx_crc5_w     = crc5(token_data);
-  assign rx_data_crc_w = {rx_buf0, rx_buf1};
-  assign addr_match_w  = trn_address_o == usb_address_i;
+  assign rx_pid_pw      = rx_tdata_i[3:0];
+  assign rx_pid_nw      = ~rx_tdata_i[7:4];
+  assign rx_crc5_w      = crc5(token_data);
+  assign rx_data_crc_w  = {rx_buf0, rx_buf1};
+  assign addr_match_w   = trn_address_o == usb_address_i;
 
 
   // -- Rx Data -- //
@@ -121,7 +121,7 @@ wire [15:0] crc16_w;
 
   // -- Rx Data CRC Calculation -- //
 
-assign crc16_w = crc16(rx_buf0, crc16_q);
+  assign crc16_w = crc16(rx_buf0, crc16_q);
 
   always @(posedge clock) begin
     if (!rx_vld0) begin
@@ -141,15 +141,15 @@ assign crc16_w = crc16(rx_buf0, crc16_q);
     endcase
   end
 
-always @(posedge clock) begin
-  if (reset) begin
-    crc_err_flag <= 1'b0;
-  end else if (state == ST_SOF_CRC || state == ST_TOKEN_CRC) begin
-    crc_err_flag <= token_crc5 != rx_crc5_w;
-  end else if (state == ST_DATA_CRC) begin
-    crc_err_flag <= crc16_w != 16'h800d;
+  always @(posedge clock) begin
+    if (reset) begin
+      crc_err_flag <= 1'b0;
+    end else if (state == ST_SOF_CRC || state == ST_TOKEN_CRC) begin
+      crc_err_flag <= token_crc5 != rx_crc5_w;
+    end else if (state == ST_DATA_CRC) begin
+      crc_err_flag <= crc16_w != 16'h800d;
+    end
   end
-end
 
   // Strobes that indicate the start and end of a (received) packet.
   always @(posedge clock) begin
@@ -246,4 +246,4 @@ end
   end
 
 
-endmodule // decode_packet
+endmodule  // decode_packet
