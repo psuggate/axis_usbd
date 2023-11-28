@@ -38,11 +38,19 @@ module usb_ulpi #(
     output wire usb_suspend_o  /* USB bus is in suspend state */
 );
 
+`ifdef __icarus
+  localparam integer SUSPEND_TIME = 190;  // ~3 ms
+  localparam integer RESET_TIME = 190;  // ~3 ms
+  localparam integer CHIRP_K_TIME = 660;  // ~1 ms
+  localparam integer CHIRP_KJ_TIME = 12;  // ~2 us
+  localparam integer SWITCH_TIME = 60;  // ~100 us 
+`else
   localparam integer SUSPEND_TIME = 190000;  // ~3 ms
   localparam integer RESET_TIME = 190000;  // ~3 ms
   localparam integer CHIRP_K_TIME = 66000;  // ~1 ms
   localparam integer CHIRP_KJ_TIME = 120;  // ~2 us
   localparam integer SWITCH_TIME = 6000;  // ~100 us 
+`endif
 
   localparam [3:0]
 	STATE_INIT = 4'h0, 
@@ -112,7 +120,7 @@ module usb_ulpi #(
   assign ulpi_rx_overflow_o = rx_err;
 
   always @(posedge ulpi_clk) begin
-    if (rst_n) begin
+    if (!rst_n) begin
       rx_err <= 1'b0;
     end else if (rx_tvalid && !axis_rx_tready_i) begin
       rx_err <= 1'b1;
@@ -282,7 +290,7 @@ module usb_ulpi #(
       // We are not driving //
       state <= state;
       snext <= 'bx;
-      ulpi_data_out_buf <= 'bx;
+      ulpi_data_out_buf <= 8'h00;
       reg_data <= 'bx;
     end else begin
       // We are driving //
@@ -328,31 +336,31 @@ module usb_ulpi #(
             state <= state;
           end
           snext <= 'bx;
-          ulpi_data_out_buf <= 'bx;
+          ulpi_data_out_buf <= 8'h00;
           reg_data <= 'bx;
         end
 
         STATE_SUSPEND: begin
           state <= usb_line_state != 2'b01 ? STATE_IDLE : STATE_SUSPEND;
           snext <= 'bx;
-          ulpi_data_out_buf <= 'bx;
+          ulpi_data_out_buf <= 8'h00;
           reg_data <= 'bx;
         end
 
         STATE_STP: begin
           state <= snext;
           snext <= 'bx;
-          ulpi_data_out_buf <= 'bx;
+          ulpi_data_out_buf <= 8'h00;
           reg_data <= 'bx;
         end
 
         STATE_IDLE: begin
           if (usb_line_state == 2'b00 && state_counter > RESET_TIME) begin
             state <= STATE_RESET;
-            ulpi_data_out_buf <= 'bx;
+            ulpi_data_out_buf <= 8'h00;
           end else if (!hs_enabled && usb_line_state == 2'b01 && state_counter > SUSPEND_TIME) begin
             state <= STATE_SUSPEND;
-            ulpi_data_out_buf <= 'bx;
+            ulpi_data_out_buf <= 8'h00;
           end else if (axis_tx_tvalid_i) begin
             ulpi_data_out_buf <= {4'b0100, axis_tx_tdata_i[3:0]};
 

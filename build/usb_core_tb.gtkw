@@ -1,0 +1,70 @@
+[*]
+[*] GTKWave Analyzer v3.3.104 (w)1999-2020 BSI
+[*] Tue Nov 28 07:44:15 2023
+[*]
+[dumpfile] "/home/patrick/dev/axis_usbd/build/usb_core_tb.vcd"
+[dumpfile_mtime] "Tue Nov 28 07:41:31 2023"
+[dumpfile_size] 128624
+[savefile] "/home/patrick/dev/axis_usbd/build/usb_core_tb.gtkw"
+[timestart] 1618500
+[size] 2560 1376
+[pos] -1 -1
+*-16.533766 2110000 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+[treeopen] ulpi_bulk_axis_inst.
+[treeopen] ulpi_bulk_axis_inst.bulk_ep_axis_bridge_inst.
+[treeopen] ulpi_bulk_axis_inst.bulk_ep_axis_bridge_inst.usb_tlp_inst.
+[sst_width] 233
+[signals_width] 206
+[sst_expanded] 1
+[sst_vpaned_height] 414
+@28
+usb_core_tb.clock
+usb_core_tb.reset
+usb_core_tb.arst_n
+ulpi_bulk_axis_inst.bulk_ep_axis_bridge_inst.usb_tlp_inst.usb_reset
+usb_core_tb.enabled
+[color] 1
+usb_core_tb.host_crc_err_w
+usb_core_tb.device_usb_idle_w
+@23
+ulpi_bulk_axis_inst.bulk_ep_axis_bridge_inst.usb_tlp_inst.device_address[6:0]
+@28
+usb_core_tb.svalid
+usb_core_tb.sready
+usb_core_tb.slast
+@22
+usb_core_tb.sdata[7:0]
+@800200
+-ULPI
+@28
+usb_core_tb.ulpi_dir
+usb_core_tb.ulpi_nxt
+usb_core_tb.ulpi_stp
+@22
+usb_core_tb.ulpi_data[7:0]
+@1000200
+-ULPI
+@28
+ulpi_bulk_axis_inst.bulk_ep_axis_bridge_inst.usb_tlp_inst.usb_vbus_valid
+@22
+ulpi_bulk_axis_inst.bulk_ep_axis_bridge_inst.usb_tlp_inst.usb_ulpi_inst.state[3:0]
+ulpi_bulk_axis_inst.bulk_ep_axis_bridge_inst.usb_tlp_inst.usb_ulpi_inst.ulpi_data_out_buf[7:0]
+@800200
+-Xfer
+@22
+[color] 7
+ulpi_bulk_axis_inst.bulk_ep_axis_bridge_inst.usb_tlp_inst.usb_xfer_inst.state[4:0]
+@28
+[color] 3
+ulpi_bulk_axis_inst.bulk_ep_axis_bridge_inst.usb_tlp_inst.usb_xfer_inst.trn_start_i
+ulpi_bulk_axis_inst.bulk_ep_axis_bridge_inst.usb_tlp_inst.usb_xfer_inst.trn_type_i[1:0]
+@1000200
+-Xfer
+@28
+ulpi_bulk_axis_inst.bulk_ep_axis_bridge_inst.usb_tlp_inst.axis_rx_tvalid
+ulpi_bulk_axis_inst.bulk_ep_axis_bridge_inst.usb_tlp_inst.axis_rx_tready
+ulpi_bulk_axis_inst.bulk_ep_axis_bridge_inst.usb_tlp_inst.axis_rx_tlast
+@22
+ulpi_bulk_axis_inst.bulk_ep_axis_bridge_inst.usb_tlp_inst.axis_tx_tdata[7:0]
+[pattern_trace] 1
+[pattern_trace] 0

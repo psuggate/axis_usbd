@@ -163,6 +163,8 @@ module bulk_ep_axis_bridge #(
       .CONFIG_DESC({EP1_OUT_DESC, EP1_IN_DESC, INTERFACE_DESC, CONFIG_DESC}),
       .HIGH_SPEED(HIGH_SPEED)
   ) usb_tlp_inst (
+.arst_ni(1'b1),
+
       .ulpi_data_in(ulpi_data_in),
       .ulpi_data_out(ulpi_data_out),
       .ulpi_dir(ulpi_dir),

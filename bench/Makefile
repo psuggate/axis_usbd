@@ -7,11 +7,13 @@ all:	build
 IVC	?= iverilog
 OPT	:= -g2005-sv -D__icarus -Wall -I../rtl/usb/
 
+# SRC	:= $(wildcard *.v)
+SIM	:= $(filter-out %_tb.v, $(wildcard *.v))
 RTL	:= ../rtl
 ARCH	= $(wildcard $(RTL)/arch/*.v)
 FIFO	= $(wildcard $(RTL)/fifo/*.v)
 USB	= $(wildcard $(RTL)/usb/*.v)
-LIB	= $(ARCH) $(FIFO) $(USB)
+LIB	= $(SIM) $(ARCH) $(FIFO) $(USB)
 
 BENCH	?= $(wildcard *_tb.v)
 OUT	:= $(BENCH:%.v=../build/%.out)

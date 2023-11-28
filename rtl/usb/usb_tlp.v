@@ -38,6 +38,8 @@ module usb_tlp #(
     parameter integer HIGH_SPEED = 1
 ) (
 
+   input wire arst_ni,
+
     input wire [7:0] ulpi_data_in,
     output wire [7:0] ulpi_data_out,
     input wire ulpi_dir,
@@ -195,10 +197,13 @@ module usb_tlp #(
 
   // -- AXI4 stream to/from ULPI stream -- //
 
+  wire usb_reset_state_w;
+  assign usb_reset = ~ulpi_reset;
+
   usb_ulpi #(
       .HIGH_SPEED(HIGH_SPEED)
   ) usb_ulpi_inst (
-      .rst_n(1'b1),
+      .rst_n(arst_ni),
 
       .ulpi_data_in(ulpi_data_in),
       .ulpi_data_out(ulpi_data_out),
@@ -221,7 +226,7 @@ module usb_tlp #(
       .ulpi_rx_overflow_o(ulpi_rx_overflow_o),
 
       .usb_vbus_valid_o(usb_vbus_valid),
-      .usb_reset_o(usb_reset),
+      .usb_reset_o(usb_reset_state_w),
       .usb_idle_o(usb_idle),
       .usb_suspend_o(usb_suspend)
   );
