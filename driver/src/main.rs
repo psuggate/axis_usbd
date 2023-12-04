@@ -43,12 +43,14 @@ fn axis_usb(args: Args) -> Result<(), rusb::Error> {
         axis_usb.serial_number()
     );
 
-    let tsr = axis_usb.read_register(0x0, None)?;
-    info!("TSR: 0x{:04x}", tsr);
-    let tlr = axis_usb.read_register(0x1, None)?;
-    info!("TLR: 0x{:04x}", tlr);
-    let rsr = axis_usb.read_register(0x2, None)?;
-    info!("RSR: 0x{:04x}", rsr);
+    if args.packet_mode {
+        let tsr = axis_usb.read_register(0x0, None)?;
+        info!("TSR: 0x{:04x}", tsr);
+        let tlr = axis_usb.read_register(0x1, None)?;
+        info!("TLR: 0x{:04x}", tlr);
+        let rsr = axis_usb.read_register(0x2, None)?;
+        info!("RSR: 0x{:04x}", rsr);
+    }
 
     if args.read_first {
         // let bytes: Vec<u8> = axis_usb.try_read(None)?;
