@@ -3,6 +3,7 @@ use driver::axis_usb::*;
 use log::{debug, error, info, LevelFilter};
 use rusb::Context;
 use simple_logger::SimpleLogger;
+use std::time::Duration;
 
 #[derive(Parser, Debug, Clone)]
 #[command(author, version, about, long_about = None)]
@@ -13,6 +14,12 @@ struct Args {
 
     #[arg(short, long, default_value = "false")]
     read_first: bool,
+
+    #[arg(short, long, default_value = "false")]
+    no_read: bool,
+
+    #[arg(short, long, default_value = "50")]
+    delay: usize,
 
     #[arg(short, long, default_value = "20")]
     size: usize,
@@ -28,6 +35,83 @@ struct Args {
     verbose: u8,
 }
 
+fn tart_read(args: &Args, tart: &mut AxisUSB) -> Result<Vec<u8>, rusb::Error> {
+    if args.no_read {
+        return Ok(Vec::new());
+    }
+
+    let bytes: Vec<u8> = match tart.try_read(None) {
+        Ok(xs) => xs,
+        Err(e) => {
+            error!("TART read failed: {:?}", e);
+            Vec::new()
+        }
+    };
+
+    if args.packet_mode {
+        if tart.write_register(0x2, 0u16, None)? == 2 {
+            debug!("REG_WRITE RSR = 0");
+        }
+    }
+    if args.packet_mode {
+        let rsr = tart.read_register(0x2, None)?;
+        debug!("REG_READ RSR = {}", rsr);
+    }
+    info!("RECEIVED (bytes = {}): {:?}", bytes.len(), &bytes);
+
+    Ok(bytes)
+}
+
+fn tart_write(args: &Args, tart: &mut AxisUSB) -> Result<Vec<u8>, rusb::Error> {
+    // let wrcmd: [u8; 5] = [0x03, 0xb0, 0x00, 0x00, 0x10];
+    // let num = tart.write(&wrcmd)?;
+    // info!("WRITTEN (bytes = {}): {:?}", num, &wrcmd);
+
+    let wrdat: [u8; 24] = [
+        0xff, 0x5a, 0xc3, 0x2d, 0x03, 0xb0, 0x00, 0x10, 0x03, 0xb0, 0x00, 0x10, 0xff, 0x5a, 0xc3,
+        0x2d, 0xff, 0x80, 0x08, 0x3c, 0xa5, 0xc3, 0x5a, 0x99,
+    ];
+    // let wrdat: Vec<u8> = wrdat[0..12].to_owned();
+    // let wrdat: Vec<u8> = wrdat[0..16].to_owned().repeat(2);
+    // let wrdat: Vec<u8> = wrdat[0..20].to_owned().repeat(32);
+    let wrdat: Vec<u8> = wrdat[0..args.size].to_owned().repeat(args.chunks);
+    // let wrdat: Vec<u8> = wrdat[0..20].to_owned().repeat(16);
+    if args.packet_mode {
+        if tart.write_register(0x0, 0u16, None)? == 2 {
+            debug!("REG_WRITE TSR");
+        }
+        if tart.write_register(0x1, wrdat.len() as u16, None)? == 2 {
+            debug!("REG_WRITE TLR = {}", wrdat.len());
+        }
+        let val: u16 = tart.read_register(0x0, None)?;
+        debug!("REG_READ TSR = {}", val);
+    }
+
+    let num = tart.write(&wrdat)?;
+    if args.packet_mode {
+        let val: u16 = tart.read_register(0x0, None)?;
+        debug!("REG_READ TSR = {}", val);
+        let val: u16 = tart.read_register(0x1, None)?;
+        debug!("REG_READ TLR = {}", val);
+    }
+    info!("WRITTEN (bytes = {}): {:?}", num, &wrdat);
+
+    /*
+    let num = tart.write(&wrdat)?;
+    info!("WRITTEN (bytes = {}): {:?}", num, &wrdat);
+    let num = tart.write(&wrdat)?;
+    info!("WRITTEN (bytes = {}): {:?}", num, &wrdat);
+    let num = tart.write(&wrdat)?;
+    info!("WRITTEN (bytes = {}): {:?}", num, &wrdat);
+     */
+
+    // let rdcmd: [u8; 5] = [0x03, 0x30, 0x00, 0x00, 0x10];
+    // let num = tart.write(&rdcmd)?;
+    // info!("WRITTEN (bytes = {}): {:?}", num, &rdcmd);
+
+    Ok(wrdat)
+}
+
 fn axis_usb(args: Args) -> Result<(), rusb::Error> {
     if args.verbose > 0 {
         info!("{:?}", &args);
@@ -37,11 +121,13 @@ fn axis_usb(args: Args) -> Result<(), rusb::Error> {
 
     let mut axis_usb = AxisUSB::open(&mut device, context)?;
 
-    info!(
-        "Product: {}, S/N: {}",
-        axis_usb.product(),
-        axis_usb.serial_number()
-    );
+    if args.verbose > 1 {
+        info!(
+            "Product: {}, S/N: {}",
+            axis_usb.product(),
+            axis_usb.serial_number()
+        );
+    }
 
     if args.packet_mode {
         let tsr = axis_usb.read_register(0x0, None)?;
@@ -64,62 +150,13 @@ fn axis_usb(args: Args) -> Result<(), rusb::Error> {
         info!("RECEIVED (bytes = {}): {:?}", bytes.len(), &bytes);
     }
 
-    // let wrcmd: [u8; 5] = [0x03, 0xb0, 0x00, 0x00, 0x10];
-    // let num = axis_usb.write(&wrcmd)?;
-    // info!("WRITTEN (bytes = {}): {:?}", num, &wrcmd);
+    spin_sleep::native_sleep(Duration::from_millis(args.delay as u64));
 
-    let wrdat: [u8; 24] = [
-        0xff, 0x5a, 0xc3, 0x2d, 0x03, 0xb0, 0x00, 0x10, 0x03, 0xb0, 0x00, 0x10, 0xff, 0x5a, 0xc3,
-        0x2d, 0xff, 0x80, 0x08, 0x3c, 0xa5, 0xc3, 0x5a, 0x99,
-    ];
-    // let wrdat: Vec<u8> = wrdat[0..12].to_owned();
-    // let wrdat: Vec<u8> = wrdat[0..16].to_owned().repeat(2);
-    // let wrdat: Vec<u8> = wrdat[0..20].to_owned().repeat(32);
-    let wrdat: Vec<u8> = wrdat[0..args.size].to_owned().repeat(args.chunks);
-    // let wrdat: Vec<u8> = wrdat[0..20].to_owned().repeat(16);
-    if args.packet_mode {
-        if axis_usb.write_register(0x0, 0u16, None)? == 2 {
-            debug!("REG_WRITE TSR");
-        }
-        if axis_usb.write_register(0x1, wrdat.len() as u16, None)? == 2 {
-            debug!("REG_WRITE TLR = {}", wrdat.len());
-        }
-        let val: u16 = axis_usb.read_register(0x0, None)?;
-        debug!("REG_READ TSR = {}", val);
-    }
-    let num = axis_usb.write(&wrdat)?;
-    if args.packet_mode {
-        let val: u16 = axis_usb.read_register(0x0, None)?;
-        debug!("REG_READ TSR = {}", val);
-        let val: u16 = axis_usb.read_register(0x1, None)?;
-        debug!("REG_READ TLR = {}", val);
-    }
-    info!("WRITTEN (bytes = {}): {:?}", num, &wrdat);
+    let _ = tart_write(&args, &mut axis_usb)?;
 
-    /*
-        let num = axis_usb.write(&wrdat)?;
-        info!("WRITTEN (bytes = {}): {:?}", num, &wrdat);
-        let num = axis_usb.write(&wrdat)?;
-        info!("WRITTEN (bytes = {}): {:?}", num, &wrdat);
-        let num = axis_usb.write(&wrdat)?;
-        info!("WRITTEN (bytes = {}): {:?}", num, &wrdat);
-    */
+    spin_sleep::native_sleep(Duration::from_millis(args.delay as u64));
 
-    // let rdcmd: [u8; 5] = [0x03, 0x30, 0x00, 0x00, 0x10];
-    // let num = axis_usb.write(&rdcmd)?;
-    // info!("WRITTEN (bytes = {}): {:?}", num, &rdcmd);
-
-    let bytes: Vec<u8> = axis_usb.try_read(None)?;
-    if args.packet_mode {
-        if axis_usb.write_register(0x2, 0u16, None)? == 2 {
-            debug!("REG_WRITE RSR = 0");
-        }
-    }
-    if args.packet_mode {
-        let rsr = axis_usb.read_register(0x2, None)?;
-        debug!("REG_READ RSR = {}", rsr);
-    }
-    info!("RECEIVED (bytes = {}): {:?}", bytes.len(), &bytes);
+    let _bytes: Vec<u8> = tart_read(&args, &mut axis_usb)?;
 
     Ok(())
 }
