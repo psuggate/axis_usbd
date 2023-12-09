@@ -10,6 +10,8 @@ pub const PRODUCT_ID: u16 = 0x0003;
 pub const MAX_BUF_SIZE: usize = 1024;
 pub const DEFAULT_TIMEOUT: Duration = Duration::from_millis(500);
 
+pub type TartResult<T> = Result<T, rusb::Error>;
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct Endpoint {
     pub config: u8,
@@ -37,7 +39,7 @@ impl Endpoint {
     }
 }
 
-pub fn find_axis_usb(context: &Context) -> Result<Device<Context>, rusb::Error> {
+pub fn find_axis_usb(context: &Context) -> TartResult<Device<Context>> {
     if let Ok(devices) = context.devices() {
         return devices
             .iter()

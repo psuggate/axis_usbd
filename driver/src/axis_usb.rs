@@ -9,9 +9,10 @@ pub const TRANSFER_LENGTH_REGISTER: u16 = 0x01u16;
 
 #[derive(Debug, PartialEq)]
 pub struct AxisUSB {
-    handle: DeviceHandle<Context>,
+    pub handle: DeviceHandle<Context>,
     interfaces: Vec<u8>,
     endpoint: Endpoint,
+    pub telemetry: Endpoint,
     label: String,
     serial: String,
     context: Context,
@@ -60,11 +61,19 @@ impl AxisUSB {
         }
         info!(" - OUT (bulk) endpoint found");
 
+        let ex_in = Endpoint {
+            config: ep_in.config,
+            interface: ep_in.interface,
+            setting: ep_in.setting,
+            address: 0x82u8,
+            has_driver: false,
+        };
+
         Ok(Self {
             handle,
             interfaces,
             endpoint: ep_in,
-            // endpoint: ep_out,
+            telemetry: ex_in,
             label,
             serial,
             context,
