@@ -4,7 +4,7 @@ use rusb::Context;
 use simple_logger::SimpleLogger;
 use std::time::Duration;
 
-use driver::{axis_usb::*, common::*};
+use driver::{axis_usb::*, common::*, tart_telemetry};
 
 #[derive(Parser, Debug, Clone)]
 #[command(author, version, about, long_about = None)]
@@ -69,6 +69,7 @@ fn tart_read(args: &Args, tart: &mut AxisUSB) -> Result<Vec<u8>, rusb::Error> {
     Ok(bytes)
 }
 
+/*
 fn to_state(seq: usize, lo: u8, hi: u8) -> String {
     let state = match hi >> 4 {
         0x01 => "ST_IDLE",
@@ -122,6 +123,7 @@ fn tart_telemetry(args: &Args, tart: &mut AxisUSB) -> TartResult<Vec<u8>> {
     }
     Ok(res)
 }
+*/
 
 fn tart_write(args: &Args, tart: &mut AxisUSB) -> Result<Vec<u8>, rusb::Error> {
     let wrdat: [u8; 24] = [
@@ -164,7 +166,8 @@ fn axis_usb(args: Args) -> Result<(), rusb::Error> {
 
     if args.verbose > 1 {
         info!(
-            "Product: {}, S/N: {}",
+            "Manufacturer: {}, Product: {}, S/N: {}",
+            axis_usb.vendor(),
             axis_usb.product(),
             axis_usb.serial_number()
         );
@@ -195,7 +198,7 @@ fn axis_usb(args: Args) -> Result<(), rusb::Error> {
     let _bytes: Vec<u8> = tart_read(&args, &mut axis_usb)?;
 
     if args.telemetry {
-        tart_telemetry(&args, &mut axis_usb)?;
+        tart_telemetry(&mut axis_usb, args.verbose)?;
     }
 
     Ok(())

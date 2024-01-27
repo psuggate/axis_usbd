@@ -13,6 +13,7 @@ pub struct AxisUSB {
     interfaces: Vec<u8>,
     endpoint: Endpoint,
     pub telemetry: Endpoint,
+    vendor: String,
     label: String,
     serial: String,
     context: Context,
@@ -24,6 +25,7 @@ impl AxisUSB {
         let mut handle = device.open()?;
         info!("AXIS USB opened ...");
 
+        let vendor = handle.read_manufacturer_string_ascii(&descriptor)?;
         let label = handle.read_product_string_ascii(&descriptor)?;
         let serial = handle.read_serial_number_string_ascii(&descriptor)?;
 
@@ -74,10 +76,15 @@ impl AxisUSB {
             interfaces,
             endpoint: ep_in,
             telemetry: ex_in,
+            vendor,
             label,
             serial,
             context,
         })
+    }
+
+    pub fn vendor(&self) -> String {
+        self.vendor.clone()
     }
 
     pub fn product(&self) -> String {
