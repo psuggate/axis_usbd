@@ -1,16 +1,6 @@
 use super::{axis_usb::*, common::*};
 use log::info;
 
-/*
-#[derive(PartialEq, Eq, PartialOrd, Ord, Debug, Copy, Clone)]
-enum UsbState {
-    UsbIdle,
-    UsbCtrl,
-    UsbBulk,
-    UsbDump,
-}
-*/
-
 fn to_state(seq: usize, lo: u8, hi: u8) -> String {
     let state = match hi >> 4 {
         0x01 => "ST_IDLE",
@@ -49,17 +39,18 @@ fn to_state(seq: usize, lo: u8, hi: u8) -> String {
     format!("{:5}  ->  {{ {} : {} : {} }}", seq, state, xctrl, xbulk)
 }
 
-fn to_hexdump(bytes: &Vec<u8>) -> String {
+pub fn to_hexdump(bytes: &Vec<u8>) -> String {
     let mut words = Vec::with_capacity(bytes.len() / 2);
     let mut odd = false;
-    let mut low = bytes[0];
+    let mut low = bytes[0] as u16;
 
     for b in bytes.iter() {
+        let x = *b as u16;
         if odd {
-            words.push(((*b as u16) << 8) | low as u16);
+            words.push((x << 8) | low);
             odd = false;
         } else {
-            low = *b;
+            low = x;
             odd = true;
         }
     }
